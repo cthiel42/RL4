@@ -1,0 +1,22 @@
+[package]
+name = "rl4"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chad Thielen"]
+
+# Disables stack unwinding on panic
+# This profile is used on `cargo build`
+[profile.dev]
+panic = "abort"
+debug = true
+
+# This profile is used on `cargo build --release`
+[profile.release]
+panic = "abort"
+debug = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bootloader_api = "0.11.3"
+

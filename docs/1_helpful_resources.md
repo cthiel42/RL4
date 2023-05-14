@@ -1,5 +1,6 @@
 ## Dependencies
 - [Rust](https://www.rust-lang.org/tools/install) - Obviously you need this. Rust's website has simple installation instructions 
+- [QEMU](https://www.qemu.org/download/) - Not a dependency per se but this makes testing the kernel locally really easy. It's included in most package managers. For Ubuntu it's `sudo apt-get install qemu-kvm`
 
 ## Helpful Rust Resources
 - [Rust by Example](https://doc.rust-lang.org/rust-by-example/) - This is a really good primer on developing in Rust. Spend a few hours to read through this to understand it's syntax and how it behaves. This site houses all of Rust's documentation, so the next logical step would be to look through what else they have.
