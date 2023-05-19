@@ -20,6 +20,7 @@ debug = true
 [dependencies]
 bootloader = "0.9.23"
 spin = "0.9.8"
+x86_64 = "0.14.10"
 
 [dependencies.lazy_static]
 version = "1.4.0"

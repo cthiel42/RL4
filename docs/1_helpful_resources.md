@@ -10,6 +10,7 @@
 ## Helpful L4 Resources
 - [seL4 Whitepaper](https://sel4.systems/About/seL4-whitepaper.pdf) - An introduction of what the seL4 microkernel is and isn't, seL4 verification, a history of L4 microkernels, and L4 use cases.
 - [seL4 GitHub](https://github.com/seL4/seL4)
+- [seL4 Tutorials](https://docs.sel4.systems/Tutorials/)
 - [L4Ka Pistachio](https://github.com/l4ka/pistachio/)
 - [A Functional Approach to Memory-Safe Operating Systems](https://pdxscholar.library.pdx.edu/cgi/viewcontent.cgi?article=1498&context=open_access_etds) - An Implementation of an L4 microkernel in Haskell
 - [L4 Version X.2 Interface](http://www.cse.unsw.edu.au/~cs9242/05/project/l4-x2.pdf) - The X.2 interface reference manual, also commonly referred to as Version 4 of the L4 interface

@@ -7,6 +7,8 @@ An L4 microkernel written in Rust.
 
 ## Current Objectives
 1. Move VGA text buffer code into a separate file and make it safer than it currently is
-1. Decide what version of the interface I'll be using (probably X.2) and set up structs for each one of those
+1. Implement basic CPU interupt handling that can be extended upon later
+1. Implement basic Memory Management that can be extended upon later
+1. Decide what version of the interface I'll be using (such as X.2) and set up structs for each one of those
 1. Implement a handler for the kernel to process system calls
 1. Start implementing core system calls in order to be able to do a very basic test of the kernel

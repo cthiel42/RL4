@@ -4,7 +4,7 @@ In the previous doc, I wrote Hello World to the VGA text buffer in a slightly im
 ## The VGA Text Buffer
 The VGA text buffer is typically a two dimensional array with 25 rows and 80 columns, where each element in the 2D array represents a character on a screen. Each entry is actually 2 bytes, where the first byte represents an ASCII character and the second byte represents how the character should be displayed. That is, what should the background color be, what should the foreground color be, and should the character be blinking. Here I'll be hard coding the color since the output will mostly just be used for debugging purposes, and doesn't require a bunch of colors.
 
-I'll make a new file called `vga` that can then be imported as a module to other parts of the kernel later on. The first bit that I'll add to it is:
+I'll make a new file called `vga.rs` that can then be imported as a module to other parts of the kernel later on. The first bit that I'll add to it is:
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct ScreenChar {
