@@ -28,6 +28,10 @@ This crate doesn't, however, actually handle the exceptions for you. Handler fun
 
 ## Double Faults
 
-// TODO
+Given that a lot of the handlers are unimplemented currently, it makes sense to create what is called the double fault handler. If a handler doesn't exist or is unable to process the error successfully, it results in another exception, which is then processed by the double fault handler. So almost any exceptions that are going to occur at this point are going to end up in the double fault handler since none of the other handlers are implemented. If the double fault handler results in an exception, this is called a triple fault and usually results in a system reset.
+
+    extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame, _error_code: u64) -> ! {
+        panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+    }
 
 More on exception handling can be found [here](https://os.phil-opp.com/cpu-exceptions/) and more on double fault handling can be found [here](https://os.phil-opp.com/double-fault-exceptions/).
