@@ -9,8 +9,8 @@ use bootloader::{BootInfo};
 mod vga;
 
 mod cpu;
-
 mod memory;
+mod threads;
 
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
@@ -18,6 +18,8 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     use memory::BootInfoFrameAllocator;
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
+    println!("Creating Task State Segment");
+    // threads::init();
     println!("Hello World");
 
     // Testing virtual memory addresses
