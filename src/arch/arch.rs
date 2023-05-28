@@ -28,8 +28,21 @@ impl Default for RegisterState {
 }
 
 pub unsafe fn get_registers() -> RegisterState {
-    // TODO: Figure out how to get the registers and return them in a RegisterState struct
-    asm!("mov rax, rax");
-
-    RegisterState::default()
+    let mut register = RegisterState::default();
+    asm!("mov rax, {}", out(reg) register.rax);
+    asm!("mov rbx, {}", out(reg) register.rbx);
+    asm!("mov rcx, {}", out(reg) register.rcx);
+    asm!("mov rdx, {}", out(reg) register.rdx);
+    asm!("mov rsi, {}", out(reg) register.rsi);
+    asm!("mov rdi, {}", out(reg) register.rdi);
+    asm!("mov rbp, {}", out(reg) register.rbp);
+    asm!("mov r8, {}", out(reg) register.r8);
+    asm!("mov r9, {}", out(reg) register.r9);
+    asm!("mov r10, {}", out(reg) register.r10);
+    asm!("mov r11, {}", out(reg) register.r11);
+    asm!("mov r12, {}", out(reg) register.r12);
+    asm!("mov r13, {}", out(reg) register.r13);
+    asm!("mov r14, {}", out(reg) register.r14);
+    asm!("mov r15, {}", out(reg) register.r15);
+    register
 }

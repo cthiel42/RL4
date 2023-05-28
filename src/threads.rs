@@ -10,6 +10,7 @@ enum ThreadState {
     Done,
 }
 
+
 pub struct Thread {
     id: usize,
     state: ThreadState,
@@ -37,6 +38,7 @@ impl Thread {
         self.save_state();
         switch(self.instruction_pointer, self.id, self.registers.clone());
     }
+
 
     unsafe fn save_state(&mut self) {
         // use the local arch module to get the current register state
