@@ -1,37 +1,13 @@
+use crate::arch::arch::RegisterState;
+use crate::arch::arch::get_registers;
 
-
+#[derive(Clone)]
+#[allow(dead_code)]
 enum ThreadState {
     Running,
     Ready,
     Waiting,
     Done,
-}
-
-#[derive(Clone)]
-struct RegisterState {
-    rax: u64,
-    rbx: u64,
-    rcx: u64,
-    rdx: u64,
-    rsi: u64,
-    rdi: u64,
-    rbp: u64,
-    r8: u64,
-    r9: u64,
-    r10: u64,
-    r11: u64,
-    r12: u64,
-    r13: u64,
-    r14: u64,
-    r15: u64,
-}
-
-impl Default for RegisterState {
-    fn default() -> RegisterState {
-        RegisterState {
-            rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rdi: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0, rbp: 0,
-        }
-    }
 }
 
 pub struct Thread {
@@ -58,12 +34,32 @@ impl Thread {
 
     // Switch to another thread. 
     pub unsafe fn switch_to(&mut self) {
-        switch(self.instruction_pointer, self.id, self.registers.clone()); // TODO: implement, think this will be a lot of assembly
-
+        self.save_state();
+        switch(self.instruction_pointer, self.id, self.registers.clone());
     }
+
+    unsafe fn save_state(&mut self) {
+        // use the local arch module to get the current register state
+        self.registers = get_registers();
+
+        // save the instruction pointer
+        self.instruction_pointer = x86_64::instructions::interrupts::without_interrupts(|| {
+            x86_64::registers::control::Cr3::read().0.start_address().as_u64() // ???
+        }) as usize;
+
+        // determine and set the thread state
+        self.state = match self.state {
+            ThreadState::Running => ThreadState::Ready,
+            ThreadState::Ready => ThreadState::Running,
+            _ => self.state.clone(),
+        };
+    }
+
 }
 
 unsafe fn switch(pointer: usize, id: usize, registers: RegisterState) {
+    // TODO: implement, think this will be a lot of assembly and might be where we implement some sort of scheduler
+    // Could make sense to move this to its own module if it gets too big
     // this function shouldnt do anything right now, its just for testing
     println!("Switching to thread {}", id);
 }

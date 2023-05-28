@@ -11,6 +11,7 @@ mod vga;
 mod cpu;
 mod memory;
 mod threads;
+mod arch;
 
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
