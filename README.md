@@ -5,10 +5,11 @@ An L4 microkernel written in Rust.
 - `/src` is where the Rust code will live for the microkernel.
 - `/docs` contains various documentation and progress reports related to this project.
 
+## Compiling and Running
+To compile the project, run `cargo bootimage` from the root directory. This will generate a file at `target/target/debug/bootimage-rl4.bin` that can then be run on QEMU using the command `qemu-system-x86_64 -drive format=raw,file=target/target/debug/bootimage-rl4.bin`
+
 ## Current Objectives
-1. Move VGA text buffer code into a separate file and make it safer than it currently is
-1. Implement basic CPU interupt handling that can be extended upon later
-1. Implement basic Memory Management that can be extended upon later
+1. Get a single very simple example of a thread running
 1. Decide what version of the interface I'll be using (such as X.2) and set up structs for each one of those
 1. Implement a handler for the kernel to process system calls
-1. Start implementing core system calls in order to be able to do a very basic test of the kernel
+1. Build out threads to handle scheduling and system calls

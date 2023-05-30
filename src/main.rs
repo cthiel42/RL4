@@ -15,14 +15,22 @@ mod arch;
 
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
-    use x86_64::{structures::paging::{Translate, Page, PhysFrame}, VirtAddr, PhysAddr};
-    use memory::BootInfoFrameAllocator;
+    
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
-    println!("Creating Task State Segment");
-    // threads::init();
     println!("Hello World");
+    loop {}
+}
 
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    println!("{}", info);
+    loop {}
+}
+
+fn test_memory(boot_info: &'static BootInfo) {
+    use x86_64::{structures::paging::{Translate, Page, PhysFrame}, VirtAddr, PhysAddr};
+    use memory::BootInfoFrameAllocator;
     // Testing virtual memory addresses
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mapper = unsafe { memory::init(phys_mem_offset) };
@@ -64,13 +72,4 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     let page = Page::containing_address(VirtAddr::new(0xdeadbeaf000));
     let frame = PhysFrame::containing_address(PhysAddr::new(0xb8000));
     memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
-
-    println!("it worked");
-    loop {}
-}
-
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
-    loop {}
 }
