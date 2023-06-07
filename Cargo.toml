@@ -19,6 +19,7 @@ debug = true
 
 [dependencies]
 bootloader = {version = "0.9.23", features = ["map_physical_memory"]}
+goblin = {version = "0.6.1", default-features = false}
 spin = "0.9.8"
 x86_64 = "0.14.10"
 

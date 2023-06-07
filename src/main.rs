@@ -15,9 +15,11 @@ mod memory;
 mod threads;
 mod arch;
 
+// Load in the root user space program
+include!("../elf_data.rs");
+
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
-    
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
     println!("Initializing root thread memory");
@@ -50,10 +52,10 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, me
         let start_frame = PhysFrame::containing_address(PhysAddr::new(region.range.start_addr()));
         let end_frame = PhysFrame::containing_address(PhysAddr::new(region.range.end_addr()));
         for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-            println!("Frame: {:?}", frame);
+            // println!("Frame: {:?}", frame);
             let page = Page::containing_address(VirtAddr::new(page_counter));
             page_counter += 4096;
-            println!("Page: {:?}", page);
+            // println!("Page: {:?}", page);
             memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
         }
     }
@@ -62,8 +64,10 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, me
     let stack_pointer = VirtAddr::new(page_counter-4096);
 
     // TODO: load root binary or ELF into memory
+    // retrieve elf binary from contents of elf_data.rs
 
-    // TODO: assign instruction pointer?
+
+    // TODO: assign instruction pointer? Possibly from ELF header
 
     (mapper, frame_allocator, stack_pointer)
 }
