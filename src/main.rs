@@ -4,7 +4,7 @@
 
 use core::panic::PanicInfo;
 use bootloader::{BootInfo};
-use x86_64::{structures::paging::{Page, PhysFrame, OffsetPageTable, Size4KiB, PageSize}, VirtAddr, PhysAddr};
+use x86_64::{structures::paging::{Page, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate}, VirtAddr, PhysAddr};
 use memory::BootInfoFrameAllocator;
 
 #[macro_use]
@@ -59,41 +59,41 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, me
     let entry_page: u64 = entry_point / Size4KiB::SIZE as u64;
     println!("Entry point is at: {}", entry_point);
     println!("Entry page is at: {}", entry_page);
+    println!("Len of ELF Data is: {}", ELF_DATA.len());
 
-    // map the elf into a page table
-    for program_header in file.segments().unwrap().iter() {
-        let segment_virtual_address: u64 = program_header.p_vaddr; // virtual address the segment should be loaded
-        let segment_physical_address: u64 = program_header.p_paddr; // physical address the segment should be loaded
-        let segment_size: u64 = program_header.p_memsz; // size of the segment in bytes
-        println!("Segment virtual address: {}", segment_virtual_address);
-        println!("Segment physical address: {}", segment_physical_address);
-
-        // Calculate the number of pages needed to load the segment
-        let num_pages = (segment_size + Size4KiB::SIZE - 1) / Size4KiB::SIZE;
-
-        // Iterate over the pages in the segment
-        for page_offset in 0..num_pages {
-            let page_virtual_address = segment_virtual_address + page_offset * Size4KiB::SIZE as u64;
-
-            // Get the physical frame for the page
-            let frame = PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(segment_physical_address + page_offset * Size4KiB::SIZE as u64));
-
-            // Map the virtual address to the physical frame in the page table
-            memory::create_mapping(Page::<Size4KiB>::containing_address(VirtAddr::new(page_virtual_address)), frame, &mut mapper, &mut frame_allocator);
+    // Information about ELF stuff can be found here https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#Program_header
+    // create page table entries while also loading the elf binary into memory
+    let unused_regions = boot_info.memory_map.iter().filter(|r| r.region_type == MemoryRegionType::Usable);
+    let mut page_counter = 0;
+    let mut elf_data_counter = 0;
+    for region in unused_regions {
+        println!("Unused Region: {:?}", region);
+        let start_frame: PhysFrame = PhysFrame::containing_address(PhysAddr::new(region.range.start_addr()));
+        let end_frame: PhysFrame = PhysFrame::containing_address(PhysAddr::new(region.range.end_addr()));
+        for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
+            // println!("Frame: {:?}", frame);
+            let page = Page::containing_address(VirtAddr::new(page_counter));
+            page_counter += 4096;
+            // println!("Page: {:?}", page);
+            // copy elf bytes into frame
+            let mut page_ptr: *mut u8 = page.start_address().as_mut_ptr();
+            for _ in 0..512 {
+                if elf_data_counter >= ELF_DATA.len() {
+                    break;
+                }
+                unsafe { page_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
+                unsafe { page_ptr = page_ptr.offset(1) };
+                elf_data_counter += 1;
+            }
+            memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
         }
     }
-
-    // TODO: fill in the rest of the memory with unused pages
-    let unused_regions = boot_info.memory_map.iter().filter(|r| r.region_type == MemoryRegionType::Usable);
-
-    // TODO: set stack pointer to highest address in page table
-    let stack_pointer = VirtAddr::new(0);
+    let stack_pointer = VirtAddr::new(page_counter-4096);
 
     (mapper, frame_allocator, stack_pointer, VirtAddr::new(entry_point))
 }
 
 fn test_memory(boot_info: &'static BootInfo) {
-    use x86_64::{structures::paging::Translate};
     // Testing virtual memory addresses
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mapper = unsafe { memory::init(phys_mem_offset) };
