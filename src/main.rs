@@ -3,8 +3,10 @@
 #![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
+use core::arch::asm;
 use bootloader::{BootInfo};
-use x86_64::{structures::paging::{Page, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate}, VirtAddr, PhysAddr};
+use x86_64::{structures::paging::{Page, PageTable, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate}, VirtAddr, PhysAddr};
+use x86_64::registers::control::{Cr3,Cr3Flags};
 use memory::BootInfoFrameAllocator;
 
 #[macro_use]
@@ -23,7 +25,9 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
     println!("Initializing root thread memory");
-    root_thread_init_memory(boot_info);
+    let (page_table, stack_pointer, entry_point) = root_thread_init_memory(boot_info);
+    println!("Starting root thread");
+    root_thread_start(page_table, stack_pointer, entry_point);
     println!("Hello World");
     loop {}
 }
@@ -34,7 +38,7 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, memory::BootInfoFrameAllocator, VirtAddr, VirtAddr) {
+fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, VirtAddr, VirtAddr) {
     use bootloader::bootinfo::MemoryRegionType;
     use elf::endian::AnyEndian;
     use elf::abi::PT_LOAD;
@@ -61,7 +65,7 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, me
     println!("Entry page is at: {}", entry_page);
     println!("Len of ELF Data is: {}", ELF_DATA.len());
 
-    // Information about ELF stuff can be found here https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#Program_header
+    // Information about ELF structure can be found here https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#Program_header
     // create page table entries while also loading the elf binary into memory
     let unused_regions = boot_info.memory_map.iter().filter(|r| r.region_type == MemoryRegionType::Usable);
     let mut page_counter = 0;
@@ -90,7 +94,25 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, me
     }
     let stack_pointer = VirtAddr::new(page_counter-4096);
 
-    (mapper, frame_allocator, stack_pointer, VirtAddr::new(entry_point))
+    (mapper, stack_pointer, VirtAddr::new(entry_point))
+}
+
+fn root_thread_start(mut page_table: OffsetPageTable, stack_pointer: VirtAddr, entry_point: VirtAddr) {
+    unsafe { 
+        // Load the page table into the CR3 register
+        let mut level_4_table = page_table.level_4_table();
+        let level_4_table_pointer: u64 = level_4_table as *const _ as u64;
+        println!("Level 4 Table Pointer: {:x}", level_4_table_pointer);
+        Cr3::write(PhysFrame::containing_address(PhysAddr::new(level_4_table_pointer)), Cr3Flags::empty()); 
+
+        // Set the stack pointer
+        let stack_pointer = stack_pointer.as_u64();
+        asm!("mov rsp, {}", in(reg) stack_pointer);
+
+        // Jump to the entry point
+        let entry_point = entry_point.as_u64();
+        asm!("jmp {}", in(reg) entry_point);
+    }
 }
 
 fn test_memory(boot_info: &'static BootInfo) {
