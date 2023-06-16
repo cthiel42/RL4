@@ -46,3 +46,21 @@ pub unsafe fn get_registers() -> RegisterState {
     asm!("mov r15, {}", out(reg) register.r15);
     register
 }
+
+pub unsafe fn set_registers(register: RegisterState) {
+    asm!("mov {}, rax", in(reg) register.rax);
+    asm!("mov {}, rbx", in(reg) register.rbx);
+    asm!("mov {}, rcx", in(reg) register.rcx);
+    asm!("mov {}, rdx", in(reg) register.rdx);
+    asm!("mov {}, rsi", in(reg) register.rsi);
+    asm!("mov {}, rdi", in(reg) register.rdi);
+    asm!("mov {}, rbp", in(reg) register.rbp);
+    asm!("mov {}, r8", in(reg) register.r8);
+    asm!("mov {}, r9", in(reg) register.r9);
+    asm!("mov {}, r10", in(reg) register.r10);
+    asm!("mov {}, r11", in(reg) register.r11);
+    asm!("mov {}, r12", in(reg) register.r12);
+    asm!("mov {}, r13", in(reg) register.r13);
+    asm!("mov {}, r14", in(reg) register.r14);
+    asm!("mov {}, r15", in(reg) register.r15);
+}
