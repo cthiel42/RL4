@@ -5,7 +5,7 @@
 use core::panic::PanicInfo;
 use core::arch::asm;
 use bootloader::{BootInfo};
-use x86_64::{structures::paging::{Page, PageTable, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate}, VirtAddr, PhysAddr};
+use x86_64::{structures::paging::{Page, PageTable, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate, RecursivePageTable}, VirtAddr, PhysAddr};
 use x86_64::registers::control::{Cr3,Cr3Flags};
 use memory::BootInfoFrameAllocator;
 
@@ -25,9 +25,9 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
     println!("Initializing root thread memory");
-    let (page_table, stack_pointer, entry_point) = root_thread_init_memory(boot_info);
+    let (stack_pointer, entry_point) = root_thread_init_memory(boot_info);
     println!("Starting root thread");
-    root_thread_start(page_table, stack_pointer, entry_point);
+    //root_thread_start(page_table, stack_pointer, entry_point);
     println!("Hello World");
     loop {}
 }
@@ -38,7 +38,7 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, VirtAddr, VirtAddr) {
+fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr) {
     use bootloader::bootinfo::MemoryRegionType;
     use elf::endian::AnyEndian;
     use elf::abi::PT_LOAD;
@@ -46,17 +46,18 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, Vi
     use elf::segment::ProgramHeader;
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
-    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut page_table = memory::new_page_table();
+    let mut mapper = memory::new_mapper(&mut page_table);
     let mut frame_allocator = unsafe {
         BootInfoFrameAllocator::init(&boot_info.memory_map)
     };
 
-    // retrieve elf binary from contents of elf_data.rs
-    let file = ElfBytes::<AnyEndian>::minimal_parse(ELF_DATA).unwrap();
+    // parse elf binary contents in elf_data.rs
+    let file = ElfBytes::<AnyEndian>::minimal_parse(ELF_DATA).unwrap(); // this line here does something that fucks up my memory. maybe delete it? work around it?
     let common_sections = file.find_common_data().unwrap();
     let first_load_phdr: Option<ProgramHeader> = file.segments().unwrap()
-        .iter()
-        .find(|phdr|{phdr.p_type == PT_LOAD});
+       .iter()
+       .find(|phdr|{phdr.p_type == PT_LOAD});
 
     // create entrypoint
     let entry_point: u64 = first_load_phdr.unwrap().p_vaddr;
@@ -72,15 +73,17 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, Vi
     let mut elf_data_counter = 0;
     for region in unused_regions {
         println!("Unused Region: {:?}", region);
-        let start_frame: PhysFrame = PhysFrame::containing_address(PhysAddr::new(region.range.start_addr()));
-        let end_frame: PhysFrame = PhysFrame::containing_address(PhysAddr::new(region.range.end_addr()));
+        let start_frame = PhysFrame::containing_address(PhysAddr::new(region.range.start_addr()));
+        let end_frame = PhysFrame::containing_address(PhysAddr::new(region.range.end_addr()));
         for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-            // println!("Frame: {:?}", frame);
+            println!("Frame: {:?}", frame);
             let page = Page::containing_address(VirtAddr::new(page_counter));
             page_counter += 4096;
-            // println!("Page: {:?}", page);
+            println!("Page: {:?}", page);
+            memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
+
             // copy elf bytes into frame
-            let mut page_ptr: *mut u8 = page.start_address().as_mut_ptr();
+            /* let mut page_ptr: *mut u8 = page.start_address().as_mut_ptr();
             for _ in 0..512 {
                 if elf_data_counter >= ELF_DATA.len() {
                     break;
@@ -88,13 +91,13 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (OffsetPageTable, Vi
                 unsafe { page_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
                 unsafe { page_ptr = page_ptr.offset(1) };
                 elf_data_counter += 1;
-            }
-            memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
+            } */
         }
     }
+
     let stack_pointer = VirtAddr::new(page_counter-4096);
 
-    (mapper, stack_pointer, VirtAddr::new(entry_point))
+    (stack_pointer, VirtAddr::new(entry_point))
 }
 
 fn root_thread_start(mut page_table: OffsetPageTable, stack_pointer: VirtAddr, entry_point: VirtAddr) {
@@ -115,6 +118,7 @@ fn root_thread_start(mut page_table: OffsetPageTable, stack_pointer: VirtAddr, e
     }
 }
 
+/*
 fn test_memory(boot_info: &'static BootInfo) {
     // Testing virtual memory addresses
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
@@ -158,3 +162,4 @@ fn test_memory(boot_info: &'static BootInfo) {
     let frame = PhysFrame::containing_address(PhysAddr::new(0xb8000));
     memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
 }
+*/

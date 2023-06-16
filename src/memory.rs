@@ -1,5 +1,5 @@
 use x86_64::{
-    structures::paging::{Size4KiB, PhysFrame, Page, PageTable, OffsetPageTable, Mapper, FrameAllocator},
+    structures::paging::{Size4KiB, PhysFrame, Page, PageTable, OffsetPageTable, Mapper, FrameAllocator, RecursivePageTable},
     PhysAddr,
     VirtAddr,
 };
@@ -13,6 +13,15 @@ pub struct BootInfoFrameAllocator {
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
     let level_4_table = active_level_4_table(physical_memory_offset);
     OffsetPageTable::new(level_4_table, physical_memory_offset)
+}
+
+pub fn new_page_table() -> PageTable {
+    PageTable::new()
+}
+
+pub fn new_mapper<'a>(page_table: &'a mut PageTable) -> OffsetPageTable<'a> {
+    let mapper = unsafe { OffsetPageTable::new(page_table, VirtAddr::new(0)) };
+    mapper
 }
 
 unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
