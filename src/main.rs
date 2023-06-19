@@ -66,6 +66,21 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
     println!("Entry page is at: {}", entry_page);
     println!("Len of ELF Data is: {}", ELF_DATA.len());
 
+    // cr3 register testing
+    println!("Page table test");
+    // This code breaks everything below it from running and I haven't the slightest clue why
+    // Using the x86_64 crate to do the same thing works fine, and I haven't the slightest clue why
+    // let cr3: u64;
+    // unsafe {
+    //     asm!("mov cr3, {}", out(reg) cr3, options(nomem, nostack, preserves_flags));
+    //     asm!("mov {}, cr3", in(reg) cr3);
+    // }
+    let (mut kernel_page_table,_) = Cr3::read();
+    let kernel_page_table_pointer: u64 = &kernel_page_table as *const _ as u64;
+    unsafe { Cr3::write(kernel_page_table, Cr3Flags::empty()); }
+    println!("CR3: {}", kernel_page_table_pointer);
+    // end test
+
     // Information about ELF structure can be found here https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#Program_header
     // create page table entries while also loading the elf binary into memory
     let unused_regions = boot_info.memory_map.iter().filter(|r| r.region_type == MemoryRegionType::Usable);
