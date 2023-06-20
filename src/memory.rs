@@ -37,6 +37,14 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     unsafe { &mut *page_table_ptr }
 }
 
+pub fn remove_mapping(page: Page, mapper: &mut OffsetPageTable) {
+    use x86_64::structures::paging::PageTableFlags as Flags;
+    let unmap_result = unsafe {
+        mapper.unmap(page)
+    };
+    unmap_result.expect("unmap failed").1.flush();
+}
+
 pub fn create_mapping(
     page: Page,
     frame: PhysFrame,

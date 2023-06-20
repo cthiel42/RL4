@@ -46,6 +46,7 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
     use elf::segment::ProgramHeader;
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    let mut kernel_table_mapper = unsafe { memory::init(phys_mem_offset) };
     let mut page_table = memory::new_page_table();
     let mut mapper = memory::new_mapper(&mut page_table);
     let mut frame_allocator = unsafe {
@@ -72,7 +73,7 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
     // Using the x86_64 crate to do the same thing works fine, and I haven't the slightest clue why
     // let cr3: u64;
     // unsafe {
-    //     asm!("mov cr3, {}", out(reg) cr3, options(nomem, nostack, preserves_flags));
+    //     asm!("mov cr3, {}", out(reg) cr3);
     //     asm!("mov {}, cr3", in(reg) cr3);
     // }
     let (mut kernel_page_table,_) = Cr3::read();
@@ -86,16 +87,38 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
     let unused_regions = boot_info.memory_map.iter().filter(|r| r.region_type == MemoryRegionType::Usable);
     let mut page_counter = 0;
     let mut elf_data_counter = 0;
+    let mut region_count = 0;
     for region in unused_regions {
         println!("Unused Region: {:?}", region);
         let start_frame = PhysFrame::containing_address(PhysAddr::new(region.range.start_addr()));
         let end_frame = PhysFrame::containing_address(PhysAddr::new(region.range.end_addr()));
+
+        // Add mappings to the kernel's page table so we can reference them to create the thread's page table
         for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-            println!("Frame: {:?}", frame);
+            //println!("Frame: {:?}", frame);
+            let kernel_page = Page::containing_address(VirtAddr::new(frame.start_address().as_u64()));
+            //println!("Kernel Page: {:?}", kernel_page);
+
+            // The first unused region is already mapped by the kernel, so we remove and recreate that
+            // mapping in order to set the permissions correctly
+            if region_count == 0 {
+                memory::remove_mapping(kernel_page, &mut kernel_table_mapper);
+                // println!("Kernel Mapping Removed");
+            }
+
+            memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, &mut frame_allocator);
+            //println!("Kernel Mapping Created");
+        }
+
+        // Add mappings to the thread's page table
+        for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
+            //println!("Frame: {:?}", frame);
             let page = Page::containing_address(VirtAddr::new(page_counter));
-            page_counter += 4096;
-            println!("Page: {:?}", page);
+            //println!("Page: {:?}", page);
             memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
+            //println!("Thread Mapping created");
+
+            page_counter += 4096;
 
             // copy elf bytes into frame
             /* let mut page_ptr: *mut u8 = page.start_address().as_mut_ptr();
@@ -108,6 +131,10 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
                 elf_data_counter += 1;
             } */
         }
+
+        // TODO: Remove mappings from kernel page table?
+
+        region_count += 1;
     }
 
     let stack_pointer = VirtAddr::new(page_counter-4096);
