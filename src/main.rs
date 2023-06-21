@@ -54,7 +54,7 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
     };
 
     // parse elf binary contents in elf_data.rs
-    let file = ElfBytes::<AnyEndian>::minimal_parse(ELF_DATA).unwrap(); // this line here does something that fucks up my memory. maybe delete it? work around it?
+    let file = ElfBytes::<AnyEndian>::minimal_parse(ELF_DATA).unwrap();
     let common_sections = file.find_common_data().unwrap();
     let first_load_phdr: Option<ProgramHeader> = file.segments().unwrap()
        .iter()
@@ -108,6 +108,18 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
 
             memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, &mut frame_allocator);
             //println!("Kernel Mapping Created");
+
+            // copy elf bytes into frame
+            // we do this here because we're actively using the kernel's page table
+            let mut page_ptr: *mut u8 = kernel_page.start_address().as_mut_ptr();
+            for _ in 0..512 {
+                if elf_data_counter >= ELF_DATA.len() {
+                    break;
+                }
+                unsafe { page_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
+                unsafe { page_ptr = page_ptr.offset(1) };
+                elf_data_counter += 1;
+            }
         }
 
         // Add mappings to the thread's page table
@@ -119,17 +131,6 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
             //println!("Thread Mapping created");
 
             page_counter += 4096;
-
-            // copy elf bytes into frame
-            /* let mut page_ptr: *mut u8 = page.start_address().as_mut_ptr();
-            for _ in 0..512 {
-                if elf_data_counter >= ELF_DATA.len() {
-                    break;
-                }
-                unsafe { page_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
-                unsafe { page_ptr = page_ptr.offset(1) };
-                elf_data_counter += 1;
-            } */
         }
 
         // TODO: Remove mappings from kernel page table?
