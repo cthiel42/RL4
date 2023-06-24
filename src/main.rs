@@ -8,6 +8,7 @@ use bootloader::{BootInfo};
 use x86_64::{structures::paging::{Page, PageTable, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate, RecursivePageTable}, VirtAddr, PhysAddr};
 use x86_64::registers::control::{Cr3,Cr3Flags};
 use memory::BootInfoFrameAllocator;
+use crate::threads::ThreadManager;
 
 #[macro_use]
 mod vga;
@@ -24,10 +25,15 @@ include!("../elf_data.rs");
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
+    
     println!("Initializing root thread memory");
-    let (stack_pointer, entry_point) = root_thread_init_memory(boot_info);
+    let mut thread_manager = ThreadManager::new(boot_info);
+    root_thread_init_memory(boot_info, &mut thread_manager);
+    
+    println!("Root thread stack pointer: {:?}", thread_manager.get_stack_pointer(1));
+    println!("Root thread instruction pointer: {:?}", thread_manager.get_instruction_pointer(1));
     println!("Starting root thread");
-    //root_thread_start(page_table, stack_pointer, entry_point);
+    //root_thread_start(thread_manager);
     println!("Hello World");
     loop {}
 }
@@ -38,7 +44,7 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr) {
+fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut ThreadManager) {
     use bootloader::bootinfo::MemoryRegionType;
     use elf::endian::AnyEndian;
     use elf::abi::PT_LOAD;
@@ -47,11 +53,7 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut kernel_table_mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut page_table = memory::new_page_table();
-    let mut mapper = memory::new_mapper(&mut page_table);
-    let mut frame_allocator = unsafe {
-        BootInfoFrameAllocator::init(&boot_info.memory_map)
-    };
+    let (mapper, frame_allocator) = thread_manager.get_page_table(1);
 
     // parse elf binary contents in elf_data.rs
     let file = ElfBytes::<AnyEndian>::minimal_parse(ELF_DATA).unwrap();
@@ -66,21 +68,6 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
     println!("Entry point is at: {}", entry_point);
     println!("Entry page is at: {}", entry_page);
     println!("Len of ELF Data is: {}", ELF_DATA.len());
-
-    // cr3 register testing
-    println!("Page table test");
-    // This code breaks everything below it from running and I haven't the slightest clue why
-    // Using the x86_64 crate to do the same thing works fine, and I haven't the slightest clue why
-    // let cr3: u64;
-    // unsafe {
-    //     asm!("mov cr3, {}", out(reg) cr3);
-    //     asm!("mov {}, cr3", in(reg) cr3);
-    // }
-    let (mut kernel_page_table,_) = Cr3::read();
-    let kernel_page_table_pointer: u64 = &kernel_page_table as *const _ as u64;
-    unsafe { Cr3::write(kernel_page_table, Cr3Flags::empty()); }
-    println!("CR3: {}", kernel_page_table_pointer);
-    // end test
 
     // Information about ELF structure can be found here https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#Program_header
     // create page table entries while also loading the elf binary into memory
@@ -106,7 +93,7 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
                 // println!("Kernel Mapping Removed");
             }
 
-            memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, &mut frame_allocator);
+            memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, frame_allocator);
             //println!("Kernel Mapping Created");
 
             // copy elf bytes into frame
@@ -127,20 +114,18 @@ fn root_thread_init_memory(boot_info: &'static BootInfo) -> (VirtAddr, VirtAddr)
             //println!("Frame: {:?}", frame);
             let page = Page::containing_address(VirtAddr::new(page_counter));
             //println!("Page: {:?}", page);
-            memory::create_mapping(page, frame, &mut mapper, &mut frame_allocator);
+            memory::create_mapping(page, frame, mapper, frame_allocator);
             //println!("Thread Mapping created");
 
             page_counter += 4096;
         }
 
-        // TODO: Remove mappings from kernel page table?
-
         region_count += 1;
     }
 
-    let stack_pointer = VirtAddr::new(page_counter-4096);
+    thread_manager.set_stack_pointer(1, page_counter-4096);
+    thread_manager.set_instruction_pointer(1, entry_point);
 
-    (stack_pointer, VirtAddr::new(entry_point))
 }
 
 fn root_thread_start(mut page_table: OffsetPageTable, stack_pointer: VirtAddr, entry_point: VirtAddr) {
