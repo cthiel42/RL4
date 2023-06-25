@@ -7,6 +7,7 @@ pub struct RegisterState {
     pub rcx: u64,
     pub rdx: u64,
     pub rsi: u64,
+    pub rsp: u64,
     pub rdi: u64,
     pub rbp: u64,
     pub r8: u64,
@@ -22,7 +23,7 @@ pub struct RegisterState {
 impl Default for RegisterState {
     fn default() -> RegisterState {
         RegisterState {
-            rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rdi: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0, rbp: 0,
+            rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rsp: 0, rdi: 0, rbp: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
         }
     }
 }
@@ -34,6 +35,7 @@ pub unsafe fn get_registers() -> RegisterState {
     asm!("mov rcx, {}", out(reg) register.rcx);
     asm!("mov rdx, {}", out(reg) register.rdx);
     asm!("mov rsi, {}", out(reg) register.rsi);
+    asm!("mov rsp, {}", out(reg) register.rsp);
     asm!("mov rdi, {}", out(reg) register.rdi);
     asm!("mov rbp, {}", out(reg) register.rbp);
     asm!("mov r8, {}", out(reg) register.r8);
@@ -47,12 +49,13 @@ pub unsafe fn get_registers() -> RegisterState {
     register
 }
 
-pub unsafe fn set_registers(register: RegisterState) {
+pub unsafe fn set_registers(register: &mut RegisterState) {
     asm!("mov {}, rax", in(reg) register.rax);
     asm!("mov {}, rbx", in(reg) register.rbx);
     asm!("mov {}, rcx", in(reg) register.rcx);
     asm!("mov {}, rdx", in(reg) register.rdx);
     asm!("mov {}, rsi", in(reg) register.rsi);
+    asm!("mov {}, rsp", in(reg) register.rsp);
     asm!("mov {}, rdi", in(reg) register.rdi);
     asm!("mov {}, rbp", in(reg) register.rbp);
     asm!("mov {}, r8", in(reg) register.r8);

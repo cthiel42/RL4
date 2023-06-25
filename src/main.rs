@@ -3,10 +3,8 @@
 #![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
-use core::arch::asm;
 use bootloader::{BootInfo};
 use x86_64::{structures::paging::{Page, PageTable, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate, RecursivePageTable}, VirtAddr, PhysAddr};
-use x86_64::registers::control::{Cr3,Cr3Flags};
 use memory::BootInfoFrameAllocator;
 use crate::threads::ThreadManager;
 
@@ -32,8 +30,9 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     
     println!("Root thread stack pointer: {:?}", thread_manager.get_stack_pointer(1));
     println!("Root thread instruction pointer: {:?}", thread_manager.get_instruction_pointer(1));
+
     println!("Starting root thread");
-    //root_thread_start(thread_manager);
+    thread_manager.switch_to(1);
     println!("Hello World");
     loop {}
 }
@@ -128,23 +127,6 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
 
 }
 
-fn root_thread_start(mut page_table: OffsetPageTable, stack_pointer: VirtAddr, entry_point: VirtAddr) {
-    unsafe { 
-        // Load the page table into the CR3 register
-        let mut level_4_table = page_table.level_4_table();
-        let level_4_table_pointer: u64 = level_4_table as *const _ as u64;
-        println!("Level 4 Table Pointer: {:x}", level_4_table_pointer);
-        Cr3::write(PhysFrame::containing_address(PhysAddr::new(level_4_table_pointer)), Cr3Flags::empty()); 
-
-        // Set the stack pointer
-        let stack_pointer = stack_pointer.as_u64();
-        asm!("mov rsp, {}", in(reg) stack_pointer);
-
-        // Jump to the entry point
-        let entry_point = entry_point.as_u64();
-        asm!("jmp {}", in(reg) entry_point);
-    }
-}
 
 /*
 fn test_memory(boot_info: &'static BootInfo) {

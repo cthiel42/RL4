@@ -1,7 +1,10 @@
 use crate::arch::arch::RegisterState;
 use crate::arch::arch::get_registers;
+use crate::arch::arch::set_registers;
 use crate::memory;
-use x86_64::structures::paging::{PageTable,OffsetPageTable};
+use core::arch::asm;
+use x86_64::{structures::paging::{PageTable, PhysFrame, OffsetPageTable}, PhysAddr};
+use x86_64::registers::control::{Cr3, Cr3Flags};
 use bootloader::BootInfo;
 
 #[derive(Clone)]
@@ -28,7 +31,7 @@ impl Thread {
     pub fn new(id: u64, stack: u64, entry_point: u64, boot_info: &'static BootInfo, page_table: &'static mut PageTable) -> Thread {
         let mut registers = RegisterState::default();
         registers.rdi = id;
-        registers.rsi = stack;
+        registers.rsp = stack;
         let mut mapper = unsafe { memory::new_mapper(page_table) };
         let mut frame_allocator = unsafe {
             memory::BootInfoFrameAllocator::init(&boot_info.memory_map)
@@ -45,8 +48,19 @@ impl Thread {
 
     // Switch to another thread. 
     pub unsafe fn switch_to(&mut self) {
-        self.save_state();
-        switch(self.instruction_pointer, self.id, self.registers.clone());
+        // Set registers
+        set_registers(&mut self.registers);
+
+        // TODO: This causes a crash loop. Need to figure out why.
+        // Load the page table into the CR3 register
+        let mut level_4_table = self.page_table.level_4_table();
+        let level_4_table_pointer: u64 = level_4_table as *const _ as u64;
+        println!("Level 4 Table Pointer: {:x}", level_4_table_pointer);
+        Cr3::write(PhysFrame::containing_address(PhysAddr::new(level_4_table_pointer)), Cr3Flags::empty()); 
+
+        // Jump to the entry point
+        let entry_point = self.instruction_pointer;
+        asm!("jmp {}", in(reg) entry_point);
     }
 
 
@@ -116,6 +130,12 @@ impl ThreadManager {
 
     pub fn get_page_table(&mut self, id: usize) -> (&mut OffsetPageTable<'static>, &mut memory::BootInfoFrameAllocator) {
         (&mut self.threads[id].page_table, &mut self.threads[id].frame_allocator)
+    }
+
+    pub fn switch_to(&mut self, id: usize) {
+        unsafe {
+            self.threads[id].switch_to();
+        }
     }
 }
 
