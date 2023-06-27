@@ -46,8 +46,30 @@ impl Thread {
         }
     }
 
-    // Switch to another thread. 
+    // Switch to this thread
     pub unsafe fn switch_to(&mut self) {
+        // check values of page table
+        let mut level_4_table = self.page_table.level_4_table();
+        let level_4_table_pointer: u64 = level_4_table as *const _ as u64;
+        println!("Level 4 Table Pointer: {:x}", level_4_table_pointer);
+
+        // read contents of memory at level 4 table pointer
+        let level_4_table_contents = unsafe { *(level_4_table_pointer as *const u64) };
+        println!("Level 4 Table Contents: {:x}", level_4_table_contents);
+
+        // read contents of level 3 table
+        let level_3_table_contents = unsafe { *(level_4_table_contents as *const u64) };
+        println!("Level 3 Table Contents: {:x}", level_3_table_contents);
+
+        // read contents of level 2 table
+        let level_2_table_contents = unsafe { *(level_3_table_contents as *const u64) };
+        println!("Level 2 Table Contents: {:x}", level_2_table_contents);
+
+        // read contents of level 1 table
+        let level_1_table_contents = unsafe { *(level_2_table_contents as *const u64) };
+        println!("Level 1 Table Contents: {:x}", level_1_table_contents);
+
+        /*
         // Set registers
         set_registers(&mut self.registers);
 
@@ -61,6 +83,7 @@ impl Thread {
         // Jump to the entry point
         let entry_point = self.instruction_pointer;
         asm!("jmp {}", in(reg) entry_point);
+        */
     }
 
 

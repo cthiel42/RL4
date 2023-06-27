@@ -23,7 +23,7 @@ include!("../elf_data.rs");
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
-    
+
     println!("Initializing root thread memory");
     let mut thread_manager = ThreadManager::new(boot_info);
     root_thread_init_memory(boot_info, &mut thread_manager);
@@ -80,53 +80,68 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
         let end_frame = PhysFrame::containing_address(PhysAddr::new(region.range.end_addr()));
 
         // Add mappings to the kernel's page table so we can reference them to create the thread's page table
+        println!("Updating kernel page table");
         for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
             //println!("Frame: {:?}", frame);
             let kernel_page = Page::containing_address(VirtAddr::new(frame.start_address().as_u64()));
             //println!("Kernel Page: {:?}", kernel_page);
 
-            // The first unused region is already mapped by the kernel, so we remove and recreate that
-            // mapping in order to set the permissions correctly
             if region_count == 0 {
                 memory::remove_mapping(kernel_page, &mut kernel_table_mapper);
-                // println!("Kernel Mapping Removed");
             }
 
             memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, frame_allocator);
             //println!("Kernel Mapping Created");
 
-            // copy elf bytes into frame
-            // we do this here because we're actively using the kernel's page table
-            let mut page_ptr: *mut u8 = kernel_page.start_address().as_mut_ptr();
-            for _ in 0..512 {
-                if elf_data_counter >= ELF_DATA.len() {
-                    break;
-                }
-                unsafe { page_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
-                unsafe { page_ptr = page_ptr.offset(1) };
-                elf_data_counter += 1;
-            }
         }
 
         // Add mappings to the thread's page table
+        println!("Creating thread page table");
         for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
-            //println!("Frame: {:?}", frame);
-            let page = Page::containing_address(VirtAddr::new(page_counter));
-            //println!("Page: {:?}", page);
-            memory::create_mapping(page, frame, mapper, frame_allocator);
-            //println!("Thread Mapping created");
+            if frame.start_address().as_u64() >= 0x1000000 {
+                // println!("Frame: {:?}", frame);
+                let page = Page::containing_address(VirtAddr::new(page_counter));
+                // println!("Page: {:?}", page);
+                memory::create_mapping(page, frame, mapper, frame_allocator);
+                // println!("Thread Mapping created");
 
-            page_counter += 4096;
+                // copy elf bytes into frame
+                let frame_page = Page::containing_address(VirtAddr::new(frame.start_address().as_u64()));
+                let mut frame_ptr: *mut u8 = frame_page.start_address().as_mut_ptr();
+                
+                // This is purely to let the compiler deduce the type of frame_page
+                if 0 == 1 {
+                    memory::create_mapping(frame_page, frame, &mut kernel_table_mapper, frame_allocator);
+                }
+
+                for _ in 0..512 {
+                    if elf_data_counter >= ELF_DATA.len() {
+                        break;
+                    }
+                    unsafe { frame_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
+                    unsafe { frame_ptr = frame_ptr.offset(1) };
+                    elf_data_counter += 1;
+                }
+                page_counter += 4096;
+            }
         }
 
         region_count += 1;
     }
 
-    thread_manager.set_stack_pointer(1, page_counter-4096);
+    thread_manager.set_stack_pointer(1, 0x5000000);
     thread_manager.set_instruction_pointer(1, entry_point);
 
 }
 
+fn print_memory_map(boot_info: &'static BootInfo) {
+    println!("Memory Map:");
+    for region in boot_info.memory_map.iter() {
+        let start_addr = region.range.start_addr();
+        let end_addr = region.range.end_addr();
+        println!("    [{:#016X}-{:#016X}] {:?}", start_addr, end_addr - 1, region.region_type);
+    }
+}
 
 /*
 fn test_memory(boot_info: &'static BootInfo) {

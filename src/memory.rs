@@ -38,7 +38,6 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
 }
 
 pub fn remove_mapping(page: Page, mapper: &mut OffsetPageTable) {
-    use x86_64::structures::paging::PageTableFlags as Flags;
     let unmap_result = unsafe {
         mapper.unmap(page)
     };
@@ -52,7 +51,7 @@ pub fn create_mapping(
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
 ) {
     use x86_64::structures::paging::PageTableFlags as Flags;
-    let flags = Flags::PRESENT | Flags::WRITABLE;
+    let flags = Flags::PRESENT | Flags::WRITABLE | Flags::USER_ACCESSIBLE;
     let map_to_result = unsafe {
         // Possibly lets a frame be mapped to multiple pages. TODO: Test this theory
         mapper.map_to(page, frame, flags, frame_allocator)
