@@ -87,42 +87,24 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
             //println!("Kernel Page: {:?}", kernel_page);
 
             if region_count == 0 {
+                //println!("Creating kernel mapping");
                 memory::remove_mapping(kernel_page, &mut kernel_table_mapper);
+                //println!("Kernel Mapping Created");
             }
 
             memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, frame_allocator);
             //println!("Kernel Mapping Created");
 
-        }
-
-        // Add mappings to the thread's page table
-        println!("Creating thread page table");
-        for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
             if frame.start_address().as_u64() >= 0x1000000 {
-                // println!("Frame: {:?}", frame);
-                let page = Page::containing_address(VirtAddr::new(page_counter));
-                // println!("Page: {:?}", page);
-                memory::create_mapping(page, frame, mapper, frame_allocator);
-                // println!("Thread Mapping created");
-
-                // copy elf bytes into frame
-                let frame_page = Page::containing_address(VirtAddr::new(frame.start_address().as_u64()));
-                let mut frame_ptr: *mut u8 = frame_page.start_address().as_mut_ptr();
-                
-                // This is purely to let the compiler deduce the type of frame_page
-                if 0 == 1 {
-                    memory::create_mapping(frame_page, frame, &mut kernel_table_mapper, frame_allocator);
-                }
-
+                let mut page_ptr: *mut u8 = kernel_page.start_address().as_mut_ptr();
                 for _ in 0..512 {
                     if elf_data_counter >= ELF_DATA.len() {
                         break;
                     }
-                    unsafe { frame_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
-                    unsafe { frame_ptr = frame_ptr.offset(1) };
+                    unsafe { page_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
+                    unsafe { page_ptr = page_ptr.offset(1) };
                     elf_data_counter += 1;
                 }
-                page_counter += 4096;
             }
         }
 

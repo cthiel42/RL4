@@ -5,8 +5,8 @@ use std::path::Path;
 
 fn main() {
     /* // Uncomment this to generate the elf_data.rs file
-    let input_file = Path::new("user_space/hello_world/target/target/debug/hello_world");
-    let output_file = Path::new("elf_data.rs");
+    let input_file = Path::new("/workspaces/RL4/user_space/hello_world/target/target/debug/hello_world");
+    let output_file = Path::new("/workspaces/RL4/elf_data.rs");
 
     let mut file = File::open(input_file).expect("Failed to open input file");
     let mut contents = Vec::new();
