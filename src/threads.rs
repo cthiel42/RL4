@@ -50,8 +50,9 @@ impl Thread {
     pub unsafe fn switch_to(&mut self) {
         // Set registers
         println!("Setting registers");
+        println!("Stack pointer: {:x}", self.registers.rsp);
+        println!("Instruction pointer: {:x}", self.instruction_pointer);
         set_registers(&mut self.registers);
-
         /*
         // TODO: Implement proper paging and use this
         // Load the page table into the CR3 register
@@ -61,9 +62,8 @@ impl Thread {
         Cr3::write(PhysFrame::containing_address(PhysAddr::new(level_4_table_pointer)), Cr3Flags::empty()); 
         */
 
-        // Jump to the entry point
-        println!("Jumping to entry point");
         let entry_point = self.instruction_pointer;
+        println!("Jumping to entry point");
         asm!("jmp {}", in(reg) entry_point);
     }
 
@@ -85,6 +85,21 @@ impl Thread {
         };
     }
 
+    pub fn set_stack_pointer(&mut self, stack_pointer: u64) {
+        self.registers.rsp = stack_pointer;
+    }
+
+    pub fn get_stack_pointer(&mut self) -> u64 {
+        self.registers.rsp
+    }
+
+    pub fn set_instruction_pointer(&mut self, instruction_pointer: u64) {
+        self.instruction_pointer = instruction_pointer;
+    }
+
+    pub fn get_instruction_pointer(&mut self) -> u64 {
+        self.instruction_pointer
+    }
 }
 
 pub struct ThreadManager {
@@ -117,19 +132,19 @@ impl ThreadManager {
     }
 
     pub fn set_instruction_pointer(&mut self, id: usize, instruction_pointer: u64) {
-        self.threads[id].instruction_pointer = instruction_pointer;
+        self.threads[id].set_instruction_pointer(instruction_pointer);
     }
 
     pub fn set_stack_pointer(&mut self, id: usize, stack_pointer: u64) {
-        self.threads[id].registers.rsi = stack_pointer;
+        self.threads[id].set_stack_pointer(stack_pointer);
     }
 
     pub fn get_instruction_pointer(&mut self, id: usize) -> u64 {
-        self.threads[id].instruction_pointer
+        self.threads[id].get_instruction_pointer()
     }
 
     pub fn get_stack_pointer(&mut self, id: usize) -> u64 {
-        self.threads[id].registers.rsi
+        self.threads[id].get_stack_pointer()
     }
 
     pub fn get_page_table(&mut self, id: usize) -> (&mut OffsetPageTable<'static>, &mut memory::BootInfoFrameAllocator) {
