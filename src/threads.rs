@@ -142,11 +142,3 @@ impl ThreadManager {
         }
     }
 }
-
-
-unsafe fn switch(pointer: u64, id: u64, registers: RegisterState) {
-    // TODO: implement, think this will be a lot of assembly and might be where we implement some sort of scheduler
-    // Could make sense to move this to its own module if it gets too big
-    // this function shouldnt do anything right now, its just for testing
-    println!("Switching to thread {}", id);
-}

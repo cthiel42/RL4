@@ -4,7 +4,7 @@
 
 use core::panic::PanicInfo;
 use bootloader::{BootInfo};
-use x86_64::{structures::paging::{Page, PageTable, PhysFrame, OffsetPageTable, Size4KiB, PageSize, Translate, RecursivePageTable}, VirtAddr, PhysAddr};
+use x86_64::{structures::paging::{Page, PhysFrame}, VirtAddr, PhysAddr};
 use memory::BootInfoFrameAllocator;
 use crate::threads::ThreadManager;
 
@@ -33,7 +33,7 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
 
     println!("Starting root thread");
     thread_manager.switch_to(1);
-    println!("Hello World");
+    println!("Hello World from the kernel!");
     loop {}
 }
 
@@ -48,31 +48,14 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
     use elf::endian::AnyEndian;
     use elf::abi::PT_LOAD;
     use elf::ElfBytes;
-    use elf::segment::ProgramHeader;
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut kernel_table_mapper = unsafe { memory::init(phys_mem_offset) };
-    let (mapper, frame_allocator) = thread_manager.get_page_table(1);
-
-    // parse elf binary contents in elf_data.rs
-    let file = ElfBytes::<AnyEndian>::minimal_parse(ELF_DATA).unwrap();
-    let common_sections = file.find_common_data().unwrap();
-    let first_load_phdr: Option<ProgramHeader> = file.segments().unwrap()
-       .iter()
-       .find(|phdr|{phdr.p_type == PT_LOAD});
-
-    // create entrypoint
-    let entry_point: u64 = first_load_phdr.unwrap().p_vaddr;
-    let entry_page: u64 = entry_point / Size4KiB::SIZE as u64;
-    println!("Entry point is at: {}", entry_point);
-    println!("Entry page is at: {}", entry_page);
-    println!("Len of ELF Data is: {}", ELF_DATA.len());
+    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
     // Information about ELF structure can be found here https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#Program_header
     // create page table entries while also loading the elf binary into memory
     let unused_regions = boot_info.memory_map.iter().filter(|r| r.region_type == MemoryRegionType::Usable);
-    let mut page_counter = 0;
-    let mut elf_data_counter = 0;
     let mut region_count = 0;
     for region in unused_regions {
         println!("Unused Region: {:?}", region);
@@ -87,33 +70,32 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
             //println!("Kernel Page: {:?}", kernel_page);
 
             if region_count == 0 {
-                //println!("Creating kernel mapping");
                 memory::remove_mapping(kernel_page, &mut kernel_table_mapper);
-                //println!("Kernel Mapping Created");
+                //println!("Original Kernel Mapping Removed");
             }
 
-            memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, frame_allocator);
+            memory::create_mapping(kernel_page, frame, &mut kernel_table_mapper, &mut frame_allocator);
             //println!("Kernel Mapping Created");
-
-            if frame.start_address().as_u64() >= 0x1000000 {
-                let mut page_ptr: *mut u8 = kernel_page.start_address().as_mut_ptr();
-                for _ in 0..512 {
-                    if elf_data_counter >= ELF_DATA.len() {
-                        break;
-                    }
-                    unsafe { page_ptr.write_volatile(ELF_DATA[elf_data_counter]) };
-                    unsafe { page_ptr = page_ptr.offset(1) };
-                    elf_data_counter += 1;
-                }
-            }
         }
 
         region_count += 1;
     }
 
+    // parse elf binary contents in elf_data.rs, load into memory
+    let file = ElfBytes::<AnyEndian>::minimal_parse(ELF_DATA).unwrap();
+    
+    for segment in file.segments().unwrap().iter() {
+        if segment.p_type != PT_LOAD {
+            continue;
+        }
+        let destination = segment.p_vaddr as usize;
+        let source = &ELF_DATA[segment.p_offset as usize..][..segment.p_filesz as usize];
+        crate::arch::elf::copy_memory(destination, source);
+    }
+
+    let entry_point: u64 = file.ehdr.e_entry;
     thread_manager.set_stack_pointer(1, 0x5000000);
     thread_manager.set_instruction_pointer(1, entry_point);
-
 }
 
 fn print_memory_map(boot_info: &'static BootInfo) {
