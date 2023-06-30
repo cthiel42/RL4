@@ -94,7 +94,7 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
     }
 
     let entry_point: u64 = file.ehdr.e_entry;
-    thread_manager.set_stack_pointer(1, 0x8000000);
+    thread_manager.set_stack_pointer(1, 0x2000000);
     thread_manager.set_instruction_pointer(1, entry_point);
 }
 

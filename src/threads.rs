@@ -30,7 +30,6 @@ impl Thread {
     // Create a new thread
     pub fn new(id: u64, stack: u64, entry_point: u64, boot_info: &'static BootInfo, page_table: &'static mut PageTable) -> Thread {
         let mut registers = RegisterState::default();
-        registers.rdi = id;
         registers.rsp = stack;
         let mut mapper = unsafe { memory::new_mapper(page_table) };
         let mut frame_allocator = unsafe {
@@ -50,9 +49,10 @@ impl Thread {
     pub unsafe fn switch_to(&mut self) {
         // Set registers
         println!("Setting registers");
-        println!("Stack pointer: {:x}", self.registers.rsp);
-        println!("Instruction pointer: {:x}", self.instruction_pointer);
-        set_registers(&mut self.registers);
+        // println!("Stack pointer: {:x}", self.registers.rsp);
+        // println!("Instruction pointer: {:x}", self.instruction_pointer);
+        set_registers(&mut self.registers, self.instruction_pointer);
+
         /*
         // TODO: Implement proper paging and use this
         // Load the page table into the CR3 register
@@ -62,9 +62,8 @@ impl Thread {
         Cr3::write(PhysFrame::containing_address(PhysAddr::new(level_4_table_pointer)), Cr3Flags::empty()); 
         */
 
-        let entry_point = self.instruction_pointer;
-        println!("Jumping to entry point");
-        asm!("jmp {}", in(reg) entry_point);
+        // println!("Jumping to entry point");
+        // asm!("jmp {}", in(reg) self.instruction_pointer);
     }
 
 
