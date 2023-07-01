@@ -61,13 +61,15 @@ fn kernel_thread_main() {
     threads::new_kernel_thread(test_kernel_fn2);
     loop {
         println!("<< 1 >>");
-        cpu::hlt_loop();
+        x86_64::instructions::hlt();
     }
 }
 
 fn test_kernel_fn2() {
-    println!("<< 2 >>");
-    cpu::hlt_loop();
+    loop {
+        println!("<< 2 >>");
+        x86_64::instructions::hlt();
+    }
 }
 
 /*
