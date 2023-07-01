@@ -19,6 +19,7 @@ mod allocator;
 mod memory;
 mod threads;
 mod arch;
+mod gdt;
 
 // Load in the root user space program
 include!("../elf_data.rs");
@@ -26,6 +27,7 @@ include!("../elf_data.rs");
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
+    gdt::init();
     cpu::init_idt();
     unsafe { cpu::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
