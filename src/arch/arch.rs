@@ -1,6 +1,7 @@
 use core::arch::asm;
 
 #[derive(Clone)]
+#[repr(packed)]
 pub struct RegisterState {
     pub rax: u64,
     pub rbx: u64,
@@ -18,12 +19,16 @@ pub struct RegisterState {
     pub r13: u64,
     pub r14: u64,
     pub r15: u64,
+    pub rip: u64,
+    pub cs: u64,
+    pub rflags: u64,
+    pub ss: u64, 
 }
 
 impl Default for RegisterState {
     fn default() -> RegisterState {
         RegisterState {
-            rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rsp: 0, rdi: 0, rbp: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
+            rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rsp: 0, rdi: 0, rbp: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0, rip: 0, cs: 0, rflags: 0, ss: 0,
         }
     }
 }

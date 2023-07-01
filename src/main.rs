@@ -1,17 +1,21 @@
 #![no_std] 
 #![no_main]
 #![feature(abi_x86_interrupt)]
+#![feature(naked_functions)]
+#![feature(asm_sym)]
 
 use core::panic::PanicInfo;
 use bootloader::{BootInfo};
 use x86_64::{structures::paging::{Page, PhysFrame}, VirtAddr, PhysAddr};
 use memory::BootInfoFrameAllocator;
 use crate::threads::ThreadManager;
+extern crate alloc;
 
 #[macro_use]
 mod vga;
 
 mod cpu;
+mod allocator;
 mod memory;
 mod threads;
 mod arch;
@@ -53,6 +57,9 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
     let mut kernel_table_mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
+    // TODO: This should probably be moved to _start, I just didn't want to deal with the borrow checker for the mapper and frame_allocator
+    allocator::init_heap(&mut kernel_table_mapper, &mut frame_allocator).expect("heap initialization failed");
+
     // Information about ELF structure can be found here https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#Program_header
     // create page table entries while also loading the elf binary into memory
     let unused_regions = boot_info.memory_map.iter().filter(|r| r.region_type == MemoryRegionType::Usable);
@@ -66,6 +73,10 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
         println!("Updating kernel page table");
         for frame in PhysFrame::range_inclusive(start_frame, end_frame) {
             //println!("Frame: {:?}", frame);
+            if frame.start_address().as_u64() >= 0x8000000 {
+                // TODO: This is a hack to avoid mapping the heap, but it should be fixed
+                continue;
+            }
             let kernel_page = Page::containing_address(VirtAddr::new(frame.start_address().as_u64()));
             //println!("Kernel Page: {:?}", kernel_page);
 
