@@ -27,6 +27,8 @@ include!("../elf_data.rs");
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
     cpu::init_idt();
+    unsafe { cpu::PICS.lock().initialize() };
+    x86_64::instructions::interrupts::enable();
 
     println!("Initializing root thread memory");
     let mut thread_manager = ThreadManager::new(boot_info);
@@ -38,13 +40,13 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Starting root thread");
     thread_manager.switch_to(1);
     println!("Hello World from the kernel!");
-    loop {}
+    cpu::hlt_loop();
 }
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    loop {}
+    cpu::hlt_loop();
 }
 
 fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut ThreadManager) {
