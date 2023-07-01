@@ -6,9 +6,9 @@
 
 use core::panic::PanicInfo;
 use bootloader::{BootInfo};
-use x86_64::{structures::paging::{Page, PhysFrame}, VirtAddr, PhysAddr};
+use x86_64::VirtAddr;
 use memory::BootInfoFrameAllocator;
-use crate::threads::ThreadManager;
+//use crate::threads::ThreadManager;
 extern crate alloc;
 
 #[macro_use]
@@ -22,7 +22,7 @@ mod arch;
 mod gdt;
 
 // Load in the root user space program
-include!("../elf_data.rs");
+// include!("../elf_data.rs");
 
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
@@ -32,15 +32,20 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     unsafe { cpu::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
 
-    println!("Initializing root thread memory");
-    let mut thread_manager = ThreadManager::new(boot_info);
-    root_thread_init_memory(boot_info, &mut thread_manager);
-    
-    println!("Root thread stack pointer: {:?}", thread_manager.get_stack_pointer(1));
-    println!("Root thread instruction pointer: {:?}", thread_manager.get_instruction_pointer(1));
+    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    let mut kernel_table_mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
+    allocator::init_heap(&mut kernel_table_mapper, &mut frame_allocator).expect("heap initialization failed");
 
+    //let mut thread_manager = ThreadManager::new(boot_info);
+    //root_thread_init_memory(boot_info, &mut thread_manager);
+    
+    //println!("Root thread stack pointer: {:?}", thread_manager.get_stack_pointer(1));
+    //println!("Root thread instruction pointer: {:?}", thread_manager.get_instruction_pointer(1));
+ 
     println!("Starting root thread");
-    thread_manager.switch_to(1);
+    //thread_manager.switch_to(1);
+    threads::new_kernel_thread(kernel_thread_main);
     println!("Hello World from the kernel!");
     cpu::hlt_loop();
 }
@@ -51,6 +56,21 @@ fn panic(info: &PanicInfo) -> ! {
     cpu::hlt_loop();
 }
 
+fn kernel_thread_main() {
+    println!("Kernel thread start");
+    threads::new_kernel_thread(test_kernel_fn2);
+    loop {
+        println!("<< 1 >>");
+        cpu::hlt_loop();
+    }
+}
+
+fn test_kernel_fn2() {
+    println!("<< 2 >>");
+    cpu::hlt_loop();
+}
+
+/*
 fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut ThreadManager) {
     use bootloader::bootinfo::MemoryRegionType;
     use elf::endian::AnyEndian;
@@ -112,7 +132,9 @@ fn root_thread_init_memory(boot_info: &'static BootInfo, thread_manager: &mut Th
     thread_manager.set_stack_pointer(1, 0x2000000);
     thread_manager.set_instruction_pointer(1, entry_point);
 }
+*/
 
+/*
 fn print_memory_map(boot_info: &'static BootInfo) {
     println!("Memory Map:");
     for region in boot_info.memory_map.iter() {
@@ -121,6 +143,7 @@ fn print_memory_map(boot_info: &'static BootInfo) {
         println!("    [{:#016X}-{:#016X}] {:?}", start_addr, end_addr - 1, region.region_type);
     }
 }
+*/
 
 /*
 fn test_memory(boot_info: &'static BootInfo) {

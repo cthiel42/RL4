@@ -1,15 +1,14 @@
 use core::arch::asm;
 
-#[derive(Clone)]
-#[repr(packed)]
+#[derive(Clone, Debug)]
+#[repr(C)]
 pub struct RegisterState {
     pub rax: u64,
     pub rbx: u64,
     pub rcx: u64,
     pub rdx: u64,
-    pub rsi: u64,
-    pub rsp: u64,
     pub rdi: u64,
+    pub rsi: u64,
     pub rbp: u64,
     pub r8: u64,
     pub r9: u64,
@@ -22,8 +21,12 @@ pub struct RegisterState {
     pub rip: u64,
     pub cs: u64,
     pub rflags: u64,
+    pub rsp: u64,    
     pub ss: u64, 
 }
+
+// Bytes needed to store the RegisterState struct
+pub const INTERRUPT_CONTEXT_SIZE: usize = 20 * 8;
 
 impl Default for RegisterState {
     fn default() -> RegisterState {

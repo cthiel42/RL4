@@ -6,6 +6,8 @@ use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
 use crate::gdt;
+use crate::threads;
+use crate::arch::arch::RegisterState;
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -32,10 +34,12 @@ lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.breakpoint.set_handler_fn(breakpoint_handler);
-        unsafe { idt.double_fault.set_handler_fn(double_fault_handler).set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX); }
-        unsafe { idt.page_fault.set_handler_fn(page_fault_handler).set_stack_index(gdt::PAGE_FAULT_IST_INDEX); }
-        idt.general_protection_fault.set_handler_fn(general_protection_fault_handler);
-        unsafe { idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler).set_stack_index(gdt::TIMER_INTERRUPT_INDEX); }
+        unsafe {
+            idt.double_fault.set_handler_fn(double_fault_handler).set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
+            idt.page_fault.set_handler_fn(page_fault_handler).set_stack_index(gdt::PAGE_FAULT_IST_INDEX);
+            idt.general_protection_fault.set_handler_fn(general_protection_fault_handler).set_stack_index(gdt::GENERAL_PROTECTION_FAULT_IST_INDEX);
+            idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler).set_stack_index(gdt::TIMER_INTERRUPT_INDEX);
+        }
         idt
     };
 }
@@ -52,10 +56,12 @@ extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame,
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 }
 
-extern "C" fn timer_interrupt_helper(_stack_frame: InterruptStackFrame){
+extern "C" fn timer_interrupt_helper(context: &mut RegisterState) -> usize {
+    let next_stack = threads::schedule_next(context);
     unsafe {
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }
+    next_stack
 }
 
 #[naked]
@@ -85,6 +91,10 @@ pub extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptSta
             "mov rdi, rsp",
             // Call the hander function
             "call {handler}",
+            "cmp rax, 0",
+            "je 2f",        // if rax != 0 {
+            "mov rsp, rax", //   rsp = rax;
+            "2:",           // }
         
             // Pop scratch registers
             "pop r15",
