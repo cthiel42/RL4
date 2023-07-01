@@ -4,7 +4,7 @@
 use core::panic::PanicInfo;
 
 #[no_mangle]
-pub extern "C" fn _start() {
+pub unsafe extern "sysv64" fn _start() {
     // write hello world to the vga buffer
     let vga_buffer = 0xb8000 as *mut u8;
     for (i, &byte) in b"Hello World!".iter().enumerate() {

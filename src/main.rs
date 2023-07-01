@@ -21,9 +21,6 @@ mod threads;
 mod arch;
 mod gdt;
 
-// Load in the root user space program
-// include!("../elf_data.rs");
-
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
@@ -37,15 +34,9 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
     allocator::init_heap(&mut kernel_table_mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    //let mut thread_manager = ThreadManager::new(boot_info);
-    //root_thread_init_memory(boot_info, &mut thread_manager);
-    
-    //println!("Root thread stack pointer: {:?}", thread_manager.get_stack_pointer(1));
-    //println!("Root thread instruction pointer: {:?}", thread_manager.get_instruction_pointer(1));
- 
     println!("Starting root thread");
-    //thread_manager.switch_to(1);
-    threads::new_kernel_thread(kernel_thread_main);
+    // threads::new_kernel_thread(kernel_thread_main);
+    threads::new_user_thread(include_bytes!("../user_space/hello_world/target/target/debug/hello_world"));
     println!("Hello World from the kernel!");
     cpu::hlt_loop();
 }

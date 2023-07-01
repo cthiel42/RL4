@@ -101,6 +101,23 @@ pub fn schedule_next(context: &RegisterState) -> usize {
     }
 }
 
+pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
+    use elf::endian::AnyEndian;
+    use elf::ElfBytes;
+    // Verify headers are for an ELF file
+    const ELF_HEADERS: [u8; 4] = [0x7f, b'E', b'L', b'F'];
+    if bin[0..4] != ELF_HEADERS {
+        return Err("Invalid ELF file");
+    }
+
+    let file = ElfBytes::<AnyEndian>::minimal_parse(bin).unwrap();
+    let entry_point: u64 = file.ehdr.e_entry;
+    for segment in file.segments().unwrap().iter() {
+        println!("Segment: {:?}", segment);
+    }
+    return Ok(0);
+}
+
 /*
 pub struct Thread {
     id: u64,
