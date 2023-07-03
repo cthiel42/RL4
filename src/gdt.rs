@@ -13,6 +13,8 @@ struct Selectors {
     code_selector: SegmentSelector,
     data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
+    user_data_selector: SegmentSelector,
+    user_code_selector: SegmentSelector,
 }
 
 lazy_static! {
@@ -40,7 +42,9 @@ lazy_static! {
         let code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
         let data_selector = gdt.add_entry(Descriptor::kernel_data_segment());
         let tss_selector = gdt.add_entry(Descriptor::tss_segment(tss));
-        (gdt, Selectors { code_selector, data_selector, tss_selector })
+        let user_code_selector = gdt.add_entry(Descriptor::user_code_segment());
+        let user_data_selector = gdt.add_entry(Descriptor::user_data_segment());
+        (gdt, Selectors { code_selector, data_selector, tss_selector, user_code_selector, user_data_selector})
     };
 }
 
@@ -55,7 +59,11 @@ pub fn set_interrupt_stack_table(index: usize, stack_end: VirtAddr) {
 
 pub fn get_kernel_segments() -> (SegmentSelector, SegmentSelector) {
     (GDT.1.code_selector, GDT.1.data_selector)
-  }
+}
+
+pub fn get_user_segments() -> (SegmentSelector, SegmentSelector) {
+    (GDT.1.user_code_selector, GDT.1.user_data_selector)
+}
 
 pub fn init() {
     use x86_64::instructions::tables::load_tss;

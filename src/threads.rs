@@ -1,12 +1,3 @@
-// use crate::arch::arch::RegisterState;
-// use crate::arch::arch::get_registers;
-// use crate::arch::arch::set_registers;
-// use crate::memory;
-// use core::arch::asm;
-// use x86_64::{structures::paging::{PageTable, PhysFrame, OffsetPageTable}, PhysAddr};
-// use x86_64::registers::control::{Cr3, Cr3Flags};
-// use bootloader::BootInfo;
-
 extern crate alloc;
 use alloc::vec::Vec;
 use spin::RwLock;
@@ -14,20 +5,18 @@ use lazy_static::lazy_static;
 use alloc::{boxed::Box, collections::vec_deque::VecDeque};
 use x86_64::instructions::interrupts;
 use x86_64::VirtAddr;
+use x86_64::structures::paging::PageTableFlags;
 use crate::gdt;
+use crate::memory;
 use crate::arch::arch::{RegisterState,INTERRUPT_CONTEXT_SIZE};
-
-// #[derive(Clone)]
-// #[allow(dead_code)]
-// enum ThreadState {
-//     Running,
-//     Ready,
-//     Waiting,
-//     Done,
-// }
 
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
 const USER_STACK_SIZE: usize = 4096 * 5;
+pub const USER_CODE_START: u64 = 0x2000000;
+pub const USER_CODE_END: u64 = 0x5000000;
+const USER_STACK_START: u64 = 0x3000000;
+const USER_HEAP_START: u64 = 0x280_0060_0000;
+const USER_HEAP_SIZE: u64 = 4 * 1024 * 1024; 
 
 struct Thread {
     kernel_stack: Vec<u8>,
@@ -104,6 +93,8 @@ pub fn schedule_next(context: &RegisterState) -> usize {
 pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
     use elf::endian::AnyEndian;
     use elf::ElfBytes;
+    use elf::abi::PT_LOAD;
+
     // Verify headers are for an ELF file
     const ELF_HEADERS: [u8; 4] = [0x7f, b'E', b'L', b'F'];
     if bin[0..4] != ELF_HEADERS {
@@ -112,151 +103,73 @@ pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
 
     let file = ElfBytes::<AnyEndian>::minimal_parse(bin).unwrap();
     let entry_point: u64 = file.ehdr.e_entry;
+    let user_page_table_ptr = memory::create_user_pagetable();
+
     for segment in file.segments().unwrap().iter() {
-        println!("Segment: {:?}", segment);
+        // println!("Segment: {:?}", segment);
+        if segment.p_type != PT_LOAD {
+            continue;
+        }
+        let segment_address = segment.p_vaddr as u64;
+        let segment_size = segment.p_memsz as u64;
+        let start_address = VirtAddr::new(segment_address);
+        let end_address = start_address + segment_size;
+        if (start_address < VirtAddr::new(USER_CODE_START))
+            || (end_address >= VirtAddr::new(USER_CODE_END)) {
+                return Err("ELF segment outside allowed range");
+            }
+
+        // Allocate memory in the pagetable
+        if memory::allocate_pages(user_page_table_ptr,
+                            VirtAddr::new(segment_address),
+                            segment_size,
+                            PageTableFlags::PRESENT |
+                            PageTableFlags::WRITABLE |
+                            PageTableFlags::USER_ACCESSIBLE).is_err() {
+            return Err("Could not allocate memory");
+        }
+
+        let source = &bin[segment.p_offset as usize..][..segment.p_filesz as usize];
+        crate::arch::elf::copy_memory(segment_address as usize, source);
     }
+
+    let mut new_thread = {
+        let kernel_stack = Vec::with_capacity(KERNEL_STACK_SIZE);
+        let kernel_stack_end = (VirtAddr::from_ptr(kernel_stack.as_ptr()) + KERNEL_STACK_SIZE).as_u64();
+        let user_stack = Vec::with_capacity(USER_STACK_SIZE);
+        let user_stack_end = (VirtAddr::from_ptr(user_stack.as_ptr()) + USER_STACK_SIZE).as_u64();
+        let context = kernel_stack_end - INTERRUPT_CONTEXT_SIZE as u64;
+
+        Box::new(Thread {
+            kernel_stack,
+            user_stack,
+            kernel_stack_end,
+            user_stack_end,
+            context
+        })
+    };
+
+    let context = unsafe {&mut *(new_thread.context as *mut RegisterState)};
+    context.rip = entry_point;
+
+    let (code_selector, data_selector) = gdt::get_user_segments();
+    context.cs = code_selector.0 as u64;
+    context.ss = data_selector.0 as u64;
+
+    if memory::allocate_pages(user_page_table_ptr,
+                           VirtAddr::new(USER_STACK_START),
+                           USER_STACK_SIZE as u64,
+                           PageTableFlags::PRESENT |
+                           PageTableFlags::WRITABLE |
+                           PageTableFlags::USER_ACCESSIBLE).is_err()  {
+        return Err("Could not allocate memory");
+    }
+    context.rsp = (USER_STACK_START as u64) + USER_STACK_SIZE as u64;
+    
+    println!("Adding user thread to queue");
+    interrupts::without_interrupts(|| {
+        RUNNING_QUEUE.write().push_back(new_thread);
+    });
+
     return Ok(0);
 }
-
-/*
-pub struct Thread {
-    id: u64,
-    state: ThreadState,
-    registers: RegisterState,
-    instruction_pointer: u64,
-    page_table: OffsetPageTable<'static>,
-    frame_allocator: memory::BootInfoFrameAllocator,
-}
-
-impl Thread {
-
-    // Create a new thread
-    pub fn new(id: u64, stack: u64, entry_point: u64, boot_info: &'static BootInfo, page_table: &'static mut PageTable) -> Thread {
-        let mut registers = RegisterState::default();
-        registers.rsp = stack;
-        let mut mapper = unsafe { memory::new_mapper(page_table) };
-        let mut frame_allocator = unsafe {
-            memory::BootInfoFrameAllocator::init(&boot_info.memory_map)
-        };
-        Thread {
-            id: id,
-            state: ThreadState::Ready,
-            registers: registers,
-            instruction_pointer: entry_point,
-            page_table: mapper,
-            frame_allocator: frame_allocator,
-        }
-    }
-
-    // Switch to this thread
-    pub unsafe fn switch_to(&mut self) {
-        // Set registers
-        println!("Setting registers");
-        // println!("Stack pointer: {:x}", self.registers.rsp);
-        // println!("Instruction pointer: {:x}", self.instruction_pointer);
-        set_registers(&mut self.registers, self.instruction_pointer);
-
-        /*
-        // TODO: Implement proper paging and use this
-        // Load the page table into the CR3 register
-        let mut level_4_table = self.page_table.level_4_table();
-        let level_4_table_pointer: u64 = level_4_table as *const _ as u64;
-        println!("Level 4 Table Pointer: {:x}", level_4_table_pointer);
-        Cr3::write(PhysFrame::containing_address(PhysAddr::new(level_4_table_pointer)), Cr3Flags::empty()); 
-        */
-
-        // println!("Jumping to entry point");
-        // asm!("jmp {}", in(reg) self.instruction_pointer);
-    }
-
-
-    unsafe fn save_state(&mut self) {
-        // use the local arch module to get the current register state
-        self.registers = get_registers();
-
-        // save the instruction pointer
-        self.instruction_pointer = x86_64::instructions::interrupts::without_interrupts(|| {
-            x86_64::registers::control::Cr3::read().0.start_address().as_u64() // ???
-        });
-
-        // determine and set the thread state
-        self.state = match self.state {
-            ThreadState::Running => ThreadState::Ready,
-            ThreadState::Ready => ThreadState::Running,
-            _ => self.state.clone(),
-        };
-    }
-
-    pub fn set_stack_pointer(&mut self, stack_pointer: u64) {
-        self.registers.rsp = stack_pointer;
-    }
-
-    pub fn get_stack_pointer(&mut self) -> u64 {
-        self.registers.rsp
-    }
-
-    pub fn set_instruction_pointer(&mut self, instruction_pointer: u64) {
-        self.instruction_pointer = instruction_pointer;
-    }
-
-    pub fn get_instruction_pointer(&mut self) -> u64 {
-        self.instruction_pointer
-    }
-}
-
-pub struct ThreadManager {
-    threads: [Thread; 3]
-}
-
-impl ThreadManager {
-
-    // Create a new thread manager
-    pub fn new(boot_info: &'static BootInfo) -> ThreadManager {
-        // TODO: Can make this more safe by getting rid of static mut and maybe using something like lazy_static
-        static mut KERNEL_TABLE: PageTable = PageTable::new(); // TODO: Read and load in the actual kernel table
-        static mut PAGE_TABLE_1: PageTable = PageTable::new();
-        static mut PAGE_TABLE_2: PageTable = PageTable::new();
-        ThreadManager {
-            threads: unsafe {[
-                Thread::new(0, 0, 0, boot_info, &mut KERNEL_TABLE),
-                Thread::new(1, 0, 0, boot_info, &mut PAGE_TABLE_1),
-                Thread::new(2, 0, 0, boot_info, &mut PAGE_TABLE_2),
-            ]}
-        }
-    }
-
-    pub fn get_thread(&mut self, id: usize) -> &mut Thread {
-        &mut self.threads[id]
-    }
-
-    pub fn set_thread(&mut self, id: usize, thread: Thread) {
-        self.threads[id] = thread;
-    }
-
-    pub fn set_instruction_pointer(&mut self, id: usize, instruction_pointer: u64) {
-        self.threads[id].set_instruction_pointer(instruction_pointer);
-    }
-
-    pub fn set_stack_pointer(&mut self, id: usize, stack_pointer: u64) {
-        self.threads[id].set_stack_pointer(stack_pointer);
-    }
-
-    pub fn get_instruction_pointer(&mut self, id: usize) -> u64 {
-        self.threads[id].get_instruction_pointer()
-    }
-
-    pub fn get_stack_pointer(&mut self, id: usize) -> u64 {
-        self.threads[id].get_stack_pointer()
-    }
-
-    pub fn get_page_table(&mut self, id: usize) -> (&mut OffsetPageTable<'static>, &mut memory::BootInfoFrameAllocator) {
-        (&mut self.threads[id].page_table, &mut self.threads[id].frame_allocator)
-    }
-
-    pub fn switch_to(&mut self, id: usize) {
-        unsafe {
-            self.threads[id].switch_to();
-        }
-    }
-}
-*/

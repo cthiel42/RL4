@@ -1,27 +1,43 @@
 use x86_64::{
-    structures::paging::{Size4KiB, PhysFrame, Page, PageTable, OffsetPageTable, Mapper, FrameAllocator},
+    structures::paging::{Size4KiB, PhysFrame, Page, PageTable, PageTableFlags, OffsetPageTable, Mapper, FrameAllocator, {mapper::MapToError}},
     PhysAddr,
     VirtAddr,
 };
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+use bootloader::BootInfo;
+use crate::allocator;
+use x86_64::instructions::interrupts;
 
 pub struct BootInfoFrameAllocator {
     memory_map: &'static MemoryMap,
     next: usize,
 }
 
-pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
-    let level_4_table = active_level_4_table(physical_memory_offset);
-    OffsetPageTable::new(level_4_table, physical_memory_offset)
+struct MemoryInfo {
+    boot_info: &'static BootInfo,
+    physical_memory_offset: VirtAddr,
+    frame_allocator: BootInfoFrameAllocator
 }
 
-pub fn new_page_table() -> PageTable {
-    PageTable::new()
-}
+static mut MEMORY_INFO: Option<MemoryInfo> = None;
 
-pub fn new_mapper<'a>(page_table: &'a mut PageTable) -> OffsetPageTable<'a> {
-    let mapper = unsafe { OffsetPageTable::new(page_table, VirtAddr::new(0)) };
-    mapper
+pub unsafe fn init(boot_info: &'static BootInfo) {
+    interrupts::without_interrupts(|| {
+        let physical_memory_offset = VirtAddr::new(boot_info.physical_memory_offset);
+        let level_4_table = unsafe {active_level_4_table(physical_memory_offset)};
+        let mut mapper = unsafe {OffsetPageTable::new(level_4_table, physical_memory_offset)};
+        let mut frame_allocator = unsafe {
+            BootInfoFrameAllocator::init(&boot_info.memory_map)
+        };
+
+        allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+        
+        unsafe { MEMORY_INFO = Some(MemoryInfo {
+            boot_info,
+            physical_memory_offset,
+            frame_allocator
+        }) };
+    });
 }
 
 unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
@@ -37,26 +53,49 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     unsafe { &mut *page_table_ptr }
 }
 
-pub fn remove_mapping(page: Page, mapper: &mut OffsetPageTable) {
-    let unmap_result = unsafe {
-        mapper.unmap(page)
-    };
-    unmap_result.expect("unmap failed").1.flush();
+pub fn create_user_pagetable() -> *mut PageTable {
+    let memory_info = unsafe {MEMORY_INFO.as_mut().unwrap()};
+    let table = unsafe {active_level_4_table(memory_info.physical_memory_offset)};
+    table as *mut PageTable
 }
 
-pub fn create_mapping(
-    page: Page,
-    frame: PhysFrame,
-    mapper: &mut OffsetPageTable,
+pub fn allocate_pages_mapper(
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) {
-    use x86_64::structures::paging::PageTableFlags as Flags;
-    let flags = Flags::PRESENT | Flags::WRITABLE | Flags::USER_ACCESSIBLE;
-    let map_to_result = unsafe {
-        // Possibly lets a frame be mapped to multiple pages. TODO: Test this theory
-        mapper.map_to(page, frame, flags, frame_allocator)
+    mapper: &mut impl Mapper<Size4KiB>,
+    start_addr: VirtAddr,
+    size: u64,
+    flags: PageTableFlags)
+    -> Result<(), MapToError<Size4KiB>> {
+
+    let page_range = {
+        let end_addr = start_addr + size - 1u64;
+        let start_page = Page::containing_address(start_addr);
+        let end_page = Page::containing_address(end_addr);
+        Page::range_inclusive(start_page, end_page)
     };
-    map_to_result.expect("map_to failed").flush();
+
+    for page in page_range {
+        let frame = frame_allocator.allocate_frame().ok_or(MapToError::FrameAllocationFailed)?;
+        unsafe {
+            mapper.map_to(page, frame, flags, frame_allocator)?.flush()
+        };
+    }
+
+    Ok(())
+}
+
+pub fn allocate_pages(level_4_table: *mut PageTable, start_addr: VirtAddr, size: u64, flags: PageTableFlags) -> Result<(), MapToError<Size4KiB>> {
+    let memory_info = unsafe {MEMORY_INFO.as_mut().unwrap()};
+
+    let mut mapper = unsafe {
+        OffsetPageTable::new(&mut *level_4_table, memory_info.physical_memory_offset)
+    };
+
+    allocate_pages_mapper(
+        &mut memory_info.frame_allocator,
+        &mut mapper,
+        start_addr, size, flags
+    )
 }
 
 impl BootInfoFrameAllocator {
