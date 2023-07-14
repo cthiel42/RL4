@@ -16,12 +16,14 @@ mod memory;
 mod threads;
 mod arch;
 mod gdt;
+mod syscalls;
 
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
     gdt::init();
     cpu::init_idt();
+    syscalls::init();
     unsafe { memory::init(boot_info) };
     unsafe { cpu::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
