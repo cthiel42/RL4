@@ -36,6 +36,20 @@ impl Default for RegisterState {
     }
 }
 
+pub fn get_cr3() -> u64 {
+    let cr3: u64;
+    unsafe {
+        asm!("mov {}, cr3", out(reg) cr3);
+    }
+    cr3
+}
+
+pub fn set_cr3(physaddr: u64) {
+    unsafe {
+        asm!("mov cr3, {addr}", addr = in(reg) physaddr);
+    }
+}
+
 pub unsafe fn get_registers() -> RegisterState {
     let mut register = RegisterState::default();
     asm!("mov {}, rax", out(reg) register.rax);

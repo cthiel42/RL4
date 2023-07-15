@@ -3,12 +3,13 @@ use alloc::vec::Vec;
 use spin::RwLock;
 use lazy_static::lazy_static;
 use alloc::{boxed::Box, collections::vec_deque::VecDeque};
+use core::arch::asm;
 use x86_64::instructions::interrupts;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::PageTableFlags;
 use crate::gdt;
 use crate::memory;
-use crate::arch::arch::{RegisterState,INTERRUPT_CONTEXT_SIZE};
+use crate::arch::arch::{RegisterState, INTERRUPT_CONTEXT_SIZE, set_cr3};
 
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
 const USER_STACK_SIZE: usize = 4096 * 5;
@@ -19,19 +20,19 @@ const USER_HEAP_START: u64 = 0x280_0060_0000;
 const USER_HEAP_SIZE: u64 = 4 * 1024 * 1024; 
 
 struct Thread {
+    id: u64,
     kernel_stack: Vec<u8>,
     user_stack: Vec<u8>,
     kernel_stack_end: u64, // goes in TSS
     user_stack_end: u64,
     context: u64, // Address of register state on kernel stack
+    page_table_physaddr: u64
 }
 
 lazy_static! {
-    static ref RUNNING_QUEUE: RwLock<VecDeque<Box<Thread>>> =
-        RwLock::new(VecDeque::new());
-
-    static ref CURRENT_THREAD: RwLock<Option<Box<Thread>>> =
-        RwLock::new(None);
+    static ref RUNNING_QUEUE: RwLock<VecDeque<Box<Thread>>> = RwLock::new(VecDeque::new());
+    static ref CURRENT_THREAD: RwLock<Option<Box<Thread>>> = RwLock::new(None);
+    static ref THREAD_COUNTER: RwLock<u64> = RwLock::new(0);
 }
 
 pub fn new_kernel_thread(function: fn()->()) {
@@ -43,11 +44,13 @@ pub fn new_kernel_thread(function: fn()->()) {
         let context = kernel_stack_end - INTERRUPT_CONTEXT_SIZE as u64;
 
         Box::new(Thread {
+            id: next_id(),
             kernel_stack,
             user_stack,
             kernel_stack_end,
             user_stack_end,
-            context})
+            context,
+            page_table_physaddr: 0})
     };
 
     // Set context registers
@@ -83,6 +86,9 @@ pub fn schedule_next(context: &RegisterState) -> usize {
             gdt::set_interrupt_stack_table(
               gdt::TIMER_INTERRUPT_INDEX as usize,
               VirtAddr::new(thread.kernel_stack_end));
+            if thread.page_table_physaddr != 0 {
+                set_cr3(thread.page_table_physaddr);
+            }
             // Point the stack to the new context
             thread.context as usize
           },
@@ -103,7 +109,8 @@ pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
 
     let file = ElfBytes::<AnyEndian>::minimal_parse(bin).unwrap();
     let entry_point: u64 = file.ehdr.e_entry;
-    let user_page_table_ptr = memory::create_user_pagetable();
+    let (user_page_table_ptr, user_page_table_physaddr) = memory::create_new_user_pagetable();
+    set_cr3(user_page_table_physaddr);
 
     for segment in file.segments().unwrap().iter() {
         // println!("Segment: {:?}", segment);
@@ -141,11 +148,13 @@ pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
         let context = kernel_stack_end - INTERRUPT_CONTEXT_SIZE as u64;
 
         Box::new(Thread {
+            id: next_id(),
             kernel_stack,
             user_stack,
             kernel_stack_end,
             user_stack_end,
-            context
+            context,
+            page_table_physaddr: user_page_table_physaddr
         })
     };
 
@@ -172,4 +181,12 @@ pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
     });
 
     return Ok(0);
+}
+
+pub fn next_id() -> u64 {
+    interrupts::without_interrupts(|| {
+        let mut counter = THREAD_COUNTER.write();
+        *counter += 1;
+        *counter
+    })
 }

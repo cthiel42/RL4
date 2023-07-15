@@ -16,7 +16,8 @@ pub struct BootInfoFrameAllocator {
 struct MemoryInfo {
     boot_info: &'static BootInfo,
     physical_memory_offset: VirtAddr,
-    frame_allocator: BootInfoFrameAllocator
+    frame_allocator: BootInfoFrameAllocator,
+    kernel_l4_table: &'static mut PageTable
 }
 
 static mut MEMORY_INFO: Option<MemoryInfo> = None;
@@ -24,8 +25,8 @@ static mut MEMORY_INFO: Option<MemoryInfo> = None;
 pub unsafe fn init(boot_info: &'static BootInfo) {
     interrupts::without_interrupts(|| {
         let physical_memory_offset = VirtAddr::new(boot_info.physical_memory_offset);
-        let level_4_table = unsafe {active_level_4_table(physical_memory_offset)};
-        let mut mapper = unsafe {OffsetPageTable::new(level_4_table, physical_memory_offset)};
+        let kernel_l4_table = unsafe {active_level_4_table(physical_memory_offset)};
+        let mut mapper = unsafe {OffsetPageTable::new(kernel_l4_table, physical_memory_offset)};
         let mut frame_allocator = unsafe {
             BootInfoFrameAllocator::init(&boot_info.memory_map)
         };
@@ -35,7 +36,8 @@ pub unsafe fn init(boot_info: &'static BootInfo) {
         unsafe { MEMORY_INFO = Some(MemoryInfo {
             boot_info,
             physical_memory_offset,
-            frame_allocator
+            frame_allocator,
+            kernel_l4_table
         }) };
     });
 }
@@ -53,10 +55,56 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     unsafe { &mut *page_table_ptr }
 }
 
-pub fn create_user_pagetable() -> *mut PageTable {
+pub fn create_empty_pagetable() -> (*mut PageTable, u64) {
     let memory_info = unsafe {MEMORY_INFO.as_mut().unwrap()};
-    let table = unsafe {active_level_4_table(memory_info.physical_memory_offset)};
-    table as *mut PageTable
+    let level_4_table_frame = memory_info.frame_allocator.allocate_frame().unwrap();
+    let virtual_address = memory_info.physical_memory_offset + level_4_table_frame.start_address().as_u64();
+    let page_table_ptr: *mut PageTable = virtual_address.as_mut_ptr();
+
+    // zero out the page table
+    unsafe {(*page_table_ptr).zero();}
+
+    // Return virtual address and physical address to empty page table
+    (page_table_ptr, level_4_table_frame.start_address().as_u64())
+}
+
+pub fn create_new_user_pagetable() -> (*mut PageTable, u64) {
+    // Create a new level 4 pagetable
+    let (table_ptr, table_physaddr) = create_empty_pagetable();
+    let table = unsafe {&mut *table_ptr};
+
+    fn copy_pages_rec(physical_memory_offset: VirtAddr, from_table: &PageTable, to_table: &mut PageTable, level: u16) {
+        for (i, entry) in from_table.iter().enumerate() {
+            if !entry.is_unused() {
+                if (level == 1) || entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+                    // Maps a frame, not a page table
+                    to_table[i].set_addr(entry.addr(), entry.flags());
+                } else {
+                    // Create a new table at level - 1
+                    let (new_table_ptr, new_table_physaddr) = create_empty_pagetable();
+                    let to_table_m1 = unsafe {&mut *new_table_ptr};
+
+                    // Point the entry to the new table
+                    to_table[i].set_addr(PhysAddr::new(new_table_physaddr), entry.flags());
+
+                    // Get reference to the input level-1 table
+                    let from_table_m1 = {
+                        let virt = physical_memory_offset + entry.addr().as_u64();
+                        unsafe {& *virt.as_ptr()}
+                    };
+
+                    // Copy level-1 entries
+                    copy_pages_rec(physical_memory_offset, from_table_m1, to_table_m1, level - 1);
+                }
+            }
+        }
+    }
+
+    // Copy kernel pages
+    let memory_info = unsafe {MEMORY_INFO.as_mut().unwrap()};
+    copy_pages_rec(memory_info.physical_memory_offset, memory_info.kernel_l4_table, table, 4);
+
+    return (table_ptr, table_physaddr)
 }
 
 pub fn allocate_pages_mapper(
