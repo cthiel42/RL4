@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use spin::RwLock;
 use lazy_static::lazy_static;
-use alloc::{boxed::Box, collections::vec_deque::VecDeque};
+use alloc::{boxed::Box, collections::vec_deque::VecDeque, sync::Arc};
 use core::arch::asm;
 use x86_64::instructions::interrupts;
 use x86_64::VirtAddr;
@@ -10,6 +10,7 @@ use x86_64::structures::paging::PageTableFlags;
 use crate::gdt;
 use crate::memory;
 use crate::arch::arch::{RegisterState, INTERRUPT_CONTEXT_SIZE, set_cr3};
+use crate::ipc::{Message,Rendezvous};
 
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
 const USER_STACK_SIZE: usize = 4096 * 5;
@@ -19,11 +20,12 @@ const USER_STACK_START: u64 = 0x3000000;
 const USER_HEAP_START: u64 = 0x280_0060_0000;
 const USER_HEAP_SIZE: u64 = 4 * 1024 * 1024; 
 
-struct Thread {
+pub struct Thread {
     id: u64,
+    handles: Vec<Arc<RwLock<Rendezvous>>>,
     kernel_stack: Vec<u8>,
     user_stack: Vec<u8>,
-    kernel_stack_end: u64, // goes in TSS
+    kernel_stack_end: u64,
     user_stack_end: u64,
     context: u64, // Address of register state on kernel stack
     page_table_physaddr: u64
@@ -45,6 +47,7 @@ pub fn new_kernel_thread(function: fn()->()) {
 
         Box::new(Thread {
             id: next_id(),
+            handles: Vec::new(),
             kernel_stack,
             user_stack,
             kernel_stack_end,
@@ -69,14 +72,13 @@ pub fn new_kernel_thread(function: fn()->()) {
     });
 }
 
-pub fn schedule_next(context: &RegisterState) -> usize {
+pub fn schedule_next(context_addr: usize) -> usize {
     let mut running_queue = RUNNING_QUEUE.write();
     let mut current_thread = CURRENT_THREAD.write();
 
     if let Some(mut thread) = current_thread.take() {
-        let mut proc_mut = thread;
-        proc_mut.context = (context as *const RegisterState) as u64;
-        running_queue.push_back(proc_mut);
+        thread.context = context_addr as u64;
+        running_queue.push_back(thread);
     }
     // Get the next thread in the queue
     *current_thread = running_queue.pop_front();
@@ -149,6 +151,7 @@ pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
 
         Box::new(Thread {
             id: next_id(),
+            handles: Vec::new(),
             kernel_stack,
             user_stack,
             kernel_stack_end,
@@ -189,4 +192,64 @@ pub fn next_id() -> u64 {
         *counter += 1;
         *counter
     })
+}
+
+pub fn take_current_thread() -> Option<Box<Thread>> {
+    CURRENT_THREAD.write().take()
+}
+
+// Add thread to beginning of queue
+pub fn schedule_thread(thread: Box<Thread>) {
+    // Turn off interrupts while modifying process table
+    interrupts::without_interrupts(|| {
+        RUNNING_QUEUE.write().push_front(thread);
+    });
+}
+
+// Makes the given thread the current thread
+pub fn set_current_thread(thread: Box<Thread>) {
+    // Replace the current thread
+    let old_current = CURRENT_THREAD.write().replace(thread);
+    if let Some(t) = old_current {
+        schedule_thread(t);
+    }
+}
+
+impl Thread {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    pub fn rendezvous(&self, id: u64) -> Option<Arc<RwLock<Rendezvous>>> {
+        self.handles.get(id as usize).map(|rv| rv.clone())
+    }
+
+    fn context_mut(&self) -> &mut RegisterState {
+        unsafe {&mut *(self.context as *mut RegisterState)}
+    }
+
+    fn context(&self) -> &RegisterState {
+        unsafe {& *(self.context as *const RegisterState)}
+    }
+
+    pub fn set_context(&mut self, context_ptr: *mut RegisterState) {
+        self.context = context_ptr as u64;
+    }
+
+    pub fn return_error(&self, error_code: u64) {
+        self.context_mut().rax = error_code;
+    }
+
+    pub fn return_message(&self, message: Message) {
+        let context = self.context_mut();
+        context.rax = 0;
+        match message {
+            Message::Short(value) => {
+                context.rdi = value;
+            },
+            Message::Long => {
+                context.rdi = 42;
+            }
+        }
+    }
 }

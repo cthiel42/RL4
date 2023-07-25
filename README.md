@@ -12,6 +12,7 @@ To compile the project, run `cargo bootimage` from the root directory. This will
 1. Switch to a kernel stack during syscalls
 1. IPC
 1. Fork Syscall
+1. Timer for Ping Pong
 1. Ping Pong Test
 1. Documentation
 1. More Documentation

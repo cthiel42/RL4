@@ -57,7 +57,7 @@ extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame,
 }
 
 extern "C" fn timer_interrupt_helper(context: &mut RegisterState) -> usize {
-    let next_stack = threads::schedule_next(context);
+    let next_stack = threads::schedule_next(context as *mut RegisterState as usize);
     unsafe {
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }
@@ -138,5 +138,35 @@ extern "x86-interrupt" fn general_protection_fault_handler(stack_frame: Interrup
 pub fn hlt_loop() -> ! {
     loop {
         x86_64::instructions::hlt();
+    }
+}
+
+pub fn launch_thread(context_addr: usize) -> ! {
+    unsafe {
+        asm!("mov rsp, rdi", // Set the stack to the RegisterState address
+
+             "pop r15",
+             "pop r14",
+             "pop r13",
+
+             "pop r12",
+             "pop r11",
+             "pop r10",
+             "pop r9",
+
+             "pop r8",
+             "pop rbp",
+             "pop rsi",
+             "pop rdi",
+
+             "pop rdx",
+             "pop rcx",
+             "pop rbx",
+             "pop rax",
+
+             "sti", // Enable interrupts
+             "iretq",// Interrupt return
+             in("rdi") context_addr,
+             options(noreturn));
     }
 }
