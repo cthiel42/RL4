@@ -80,10 +80,12 @@ pub fn schedule_next(context_addr: usize) -> usize {
         thread.context = context_addr as u64;
         running_queue.push_back(thread);
     }
+    
     // Get the next thread in the queue
     *current_thread = running_queue.pop_front();
     match current_thread.as_ref() {
         Some(thread) => {
+            println!("Switching to thread {}", thread.id());
             // Set the kernel stack for the next interrupt
             gdt::set_interrupt_stack_table(
               gdt::TIMER_INTERRUPT_INDEX as usize,
@@ -98,7 +100,7 @@ pub fn schedule_next(context_addr: usize) -> usize {
     }
 }
 
-pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
+pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Result<usize, &'static str> {
     use elf::endian::AnyEndian;
     use elf::ElfBytes;
     use elf::abi::PT_LOAD;
@@ -151,7 +153,7 @@ pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
 
         Box::new(Thread {
             id: next_id(),
-            handles: Vec::new(),
+            handles,
             kernel_stack,
             user_stack,
             kernel_stack_end,
@@ -180,7 +182,7 @@ pub fn new_user_thread(bin: &[u8]) -> Result<usize, &'static str> {
     
     println!("Adding user thread to queue");
     interrupts::without_interrupts(|| {
-        RUNNING_QUEUE.write().push_back(new_thread);
+        RUNNING_QUEUE.write().push_front(new_thread);
     });
 
     return Ok(0);

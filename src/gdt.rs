@@ -8,6 +8,7 @@ pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 pub const PAGE_FAULT_IST_INDEX: u16 = 0;
 pub const GENERAL_PROTECTION_FAULT_IST_INDEX: u16 = 0;
 pub const TIMER_INTERRUPT_INDEX: u16 = 1;
+pub const SYSCALL_TEMP_INDEX: u16 = 2;
 
 struct Selectors {
     code_selector: SegmentSelector,
@@ -63,6 +64,11 @@ pub fn get_kernel_segments() -> (SegmentSelector, SegmentSelector) {
 
 pub fn get_user_segments() -> (SegmentSelector, SegmentSelector) {
     (GDT.1.user_code_selector, GDT.1.user_data_selector)
+}
+
+pub fn tss_address() -> u64 {
+    let tss_ptr = &*TSS.lock() as *const TaskStateSegment;
+    tss_ptr as u64
 }
 
 pub fn init() {

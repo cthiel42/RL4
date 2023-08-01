@@ -1,0 +1,2 @@
+[build]
+rustflags = ["-C", "linker-flavor=ld", "-C", "link-args=-Ttext-segment=2000000 -Trodata-segment=2100000", "-C", "relocation-model=static"]

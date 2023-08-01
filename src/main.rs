@@ -2,10 +2,14 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 #![feature(naked_functions)]
+#![feature(asm_const)]
 
 use core::panic::PanicInfo;
 use bootloader::{BootInfo};
+use spin::RwLock;
+use lazy_static::lazy_static;
 extern crate alloc;
+use alloc::vec::Vec;
 
 #[macro_use]
 mod vga;
@@ -19,6 +23,11 @@ mod gdt;
 mod syscalls;
 mod ipc;
 
+
+lazy_static! {
+    static ref RENDEZVOUS: alloc::sync::Arc<RwLock<ipc::Rendezvous>> = alloc::sync::Arc::new(RwLock::new(ipc::Rendezvous::Empty));
+}
+
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
@@ -31,7 +40,8 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
 
     println!("Starting root thread");
     // threads::new_kernel_thread(kernel_thread_main);
-    let _ = threads::new_user_thread(include_bytes!("../user_space/hello_world/target/target/debug/hello_world"));
+    
+    start_test();
     println!("Hello World from the kernel!");
     cpu::hlt_loop();
 }
@@ -40,6 +50,15 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
     cpu::hlt_loop();
+}
+
+fn start_test() {
+    let _ = threads::new_user_thread(include_bytes!("../user_space/test/target/target/debug/test"), Vec::from([RENDEZVOUS.clone()]));
+}
+
+pub fn start_ping_pong() {
+    let _ = threads::new_user_thread(include_bytes!("../user_space/ping_pong/target/target/debug/ping_pong"), Vec::from([RENDEZVOUS.clone()]));
+    println!("Ping pong thread created - kernel");
 }
 
 fn kernel_thread_main() {
