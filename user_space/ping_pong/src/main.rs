@@ -9,11 +9,32 @@ pub unsafe extern "sysv64" fn _start() {
     let s = "hello world from ping pong";
     unsafe {
         asm!("mov rax, 1", // write syscall function
-             "syscall",
-             in("rdi") s.as_ptr(), // First argument
-             in("rsi") s.len()); // Second argument
+            "syscall",
+            in("rdi") s.as_ptr(), // First argument
+            in("rsi") s.len()); // Second argument
     }
 
+    let array_of_strings: [&str; 3] = ["1", "2", "3"];
+    for s in &array_of_strings{
+        unsafe {
+            asm!("mov rax, 1", // write syscall function
+                "syscall",
+                in("rdi") s.as_ptr(), // First argument
+                in("rsi") s.len()); // Second argument
+        }
+        for _ in 1..10000000 {
+            unsafe { asm!("nop"); }
+        }
+
+        // Yield
+        unsafe {
+            asm!("mov rax, 4",
+                "syscall");
+        }
+    }
+
+
+    /*
     // receive ipc message
     let mut msg: u64 = 0;
     let mut err: u64 = 0;
@@ -24,14 +45,7 @@ pub unsafe extern "sysv64" fn _start() {
              lateout("rax") err,
              lateout("rdi") msg); // First argument
     }
-
-    let s = "hello world from ping pong again";
-    unsafe {
-        asm!("mov rax, 1", // write syscall function
-             "syscall",
-             in("rdi") s.as_ptr(), // First argument
-             in("rsi") s.len()); // Second argument
-    }
+    */
 }
 
 #[panic_handler]

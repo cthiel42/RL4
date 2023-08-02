@@ -5,7 +5,6 @@ use crate::cpu;
 use crate::gdt;
 use crate::arch::arch::RegisterState;
 use crate::ipc::Message;
-use crate::start_ping_pong;
 
 const MSR_STAR: usize = 0xc0000081;
 const MSR_LSTAR: usize = 0xc0000082;
@@ -69,7 +68,7 @@ extern "C" fn handle_syscall() {
 
             "4: cmp rax, 4",      // } if rax == 4 {
             "jne 6f",             //   jump to end since there are no more syscalls
-            "call {start_ping_pong}",    //   start_ping_pong();
+            "call {sys_yield}",   //   sys_yield();
             "jmp 6f",             //   jump to end
 
             "6: ",                // }
@@ -108,7 +107,7 @@ extern "C" fn handle_syscall() {
             hello_world = sym hello_world,
             ipc_write = sym ipc_write,
             ipc_read = sym ipc_read,
-            start_ping_pong = sym start_ping_pong,
+            sys_yield = sym sys_yield,
             tss_timer = const(0x24 + gdt::TIMER_INTERRUPT_INDEX * 8),
             tss_temp = const(0x24 + gdt::SYSCALL_TEMP_INDEX * 8),
             ks_offset = const(SYSCALL_KERNEL_STACK_OFFSET),
@@ -235,17 +234,16 @@ fn ipc_write(context_ptr: *mut RegisterState, handle: u64, data: u64) {
     }
 }
 
+fn sys_yield(context_ptr: *mut RegisterState) {
+    let next_stack = threads::schedule_next(context_ptr as usize);
+    cpu::launch_thread(next_stack);
+}
+
 extern "C" fn sys_write(ptr: *mut u8, len:usize) {
     let u8_slice = unsafe {slice::from_raw_parts(ptr, len)};
 
     if let Ok(s) = str::from_utf8(u8_slice) {
         println!("Write '{}'", s);
-        // print current stack address
-        let stack_addr: u64;
-        unsafe {
-            asm!("mov {}, rsp", out(reg) stack_addr);
-        }
-        println!("Stack address: {:#x}", stack_addr);
     } else {
         println!("Write failed");
     }

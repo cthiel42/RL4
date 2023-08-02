@@ -32,16 +32,14 @@ lazy_static! {
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Creating Interrupt Descriptor Table");
     gdt::init();
-    cpu::init_idt();
     syscalls::init();
+    cpu::init_idt();
     unsafe { memory::init(boot_info) };
     unsafe { cpu::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
 
     println!("Starting root thread");
-    // threads::new_kernel_thread(kernel_thread_main);
-    
-    start_test();
+    threads::new_kernel_thread(start_ping_pong);
     println!("Hello World from the kernel!");
     cpu::hlt_loop();
 }
@@ -56,9 +54,13 @@ fn start_test() {
     let _ = threads::new_user_thread(include_bytes!("../user_space/test/target/target/debug/test"), Vec::from([RENDEZVOUS.clone()]));
 }
 
-pub fn start_ping_pong() {
+fn start_ping_pong() {
+    println!("kernel thread started");
     let _ = threads::new_user_thread(include_bytes!("../user_space/ping_pong/target/target/debug/ping_pong"), Vec::from([RENDEZVOUS.clone()]));
-    println!("Ping pong thread created - kernel");
+    println!("One ping pong thread started. Starting the next - kernel");
+    let _ = threads::new_user_thread(include_bytes!("../user_space/ping_pong/target/target/debug/ping_pong"), Vec::from([RENDEZVOUS.clone()]));
+    println!("Ping pong threads created - kernel");
+    x86_64::instructions::hlt();
 }
 
 fn kernel_thread_main() {

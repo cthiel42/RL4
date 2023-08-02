@@ -9,7 +9,7 @@ use x86_64::VirtAddr;
 use x86_64::structures::paging::PageTableFlags;
 use crate::gdt;
 use crate::memory;
-use crate::arch::arch::{RegisterState, INTERRUPT_CONTEXT_SIZE, set_cr3};
+use crate::arch::arch::{RegisterState, INTERRUPT_CONTEXT_SIZE, set_cr3, get_cr3};
 use crate::ipc::{Message,Rendezvous};
 
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
@@ -78,6 +78,7 @@ pub fn schedule_next(context_addr: usize) -> usize {
 
     if let Some(mut thread) = current_thread.take() {
         thread.context = context_addr as u64;
+        thread.page_table_physaddr = get_cr3();
         running_queue.push_back(thread);
     }
     
@@ -85,7 +86,6 @@ pub fn schedule_next(context_addr: usize) -> usize {
     *current_thread = running_queue.pop_front();
     match current_thread.as_ref() {
         Some(thread) => {
-            println!("Switching to thread {}", thread.id());
             // Set the kernel stack for the next interrupt
             gdt::set_interrupt_stack_table(
               gdt::TIMER_INTERRUPT_INDEX as usize,
@@ -93,6 +93,7 @@ pub fn schedule_next(context_addr: usize) -> usize {
             if thread.page_table_physaddr != 0 {
                 set_cr3(thread.page_table_physaddr);
             }
+            println!("Switching to thread {}", thread.id());
             // Point the stack to the new context
             thread.context as usize
           },

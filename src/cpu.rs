@@ -61,6 +61,7 @@ extern "C" fn timer_interrupt_helper(context: &mut RegisterState) -> usize {
     unsafe {
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }
+    println!("timer interrupt {}", next_stack);
     next_stack
 }
 
@@ -167,6 +168,7 @@ pub fn launch_thread(context_addr: usize) -> ! {
              "sti", // Enable interrupts
              "iretq",// Interrupt return
              in("rdi") context_addr,
-             options(noreturn));
+             options(noreturn)
+        );
     }
 }
