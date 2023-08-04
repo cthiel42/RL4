@@ -14,7 +14,7 @@ pub unsafe extern "sysv64" fn _start() {
             in("rsi") s.len()); // Second argument
     }
 
-    let array_of_strings: [&str; 3] = ["1", "2", "3"];
+    let array_of_strings: [&str; 30] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30"];
     for s in &array_of_strings{
         unsafe {
             asm!("mov rax, 1", // write syscall function
