@@ -180,6 +180,8 @@ pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Res
         return Err("Could not allocate memory");
     }
     context.rsp = (USER_STACK_START as u64) + USER_STACK_SIZE as u64;
+    context.rax = USER_HEAP_START as u64;
+    context.rcx = USER_HEAP_SIZE as u64;
     
     println!("Adding user thread to queue");
     interrupts::without_interrupts(|| {

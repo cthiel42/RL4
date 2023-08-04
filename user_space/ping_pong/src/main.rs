@@ -33,6 +33,12 @@ pub unsafe extern "sysv64" fn _start() {
         }
     }
 
+    loop {
+        unsafe {
+            asm!("mov rax, 4",
+                "syscall");
+        }
+    }
 
     /*
     // receive ipc message
