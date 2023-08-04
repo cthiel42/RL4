@@ -46,32 +46,12 @@ extern "C" fn handle_syscall() {
             "push r14",
             "push r15",
 
-            "cmp rax, 0",         // if rax == 0 {
-            "jne 1f",
-            "call {hello_world}", //   hello_world();
-            "jmp 6f",             //   jump to end
-
-            "1: cmp rax, 1",      // } if rax == 1 {
-            "jne 2f",
-            "call {sys_write}",   //   sys_write();
-            "jmp 6f",             //   jump to end
-
-            "2: cmp rax, 2",      // } if rax == 2 {
-            "jne 3f",
-            "call {ipc_write}",   //   ipc_write();
-            "jmp 6f",             //   jump to end
-
-            "3: cmp rax, 3",      // } if rax == 3 {
-            "jne 4f",             //
-            "call {ipc_read}",    //   ipc_read();
-            "jmp 6f",             //   jump to end
-
-            "4: cmp rax, 4",      // } if rax == 4 {
-            "jne 6f",             //   jump to end since there are no more syscalls
-            "call {sys_yield}",   //   sys_yield();
-            "jmp 6f",             //   jump to end
-
-            "6: ",                // }
+            "mov r8, rdx", // Fifth argument <- Syscall third argument
+            "mov rcx, rsi", // Fourth argument <- Syscall second argument
+            "mov rdx, rdi", // Third argument <- Syscall first argument
+            "mov rsi, rax", // Second argument is the syscall number
+            "mov rdi, rsp", // First argument is the Context address
+            "call {syscall_router}",
 
             "pop r15", // restore callee-saved registers
             "pop r14",
@@ -103,11 +83,7 @@ extern "C" fn handle_syscall() {
             "popf",
             "jmp rcx",
 
-            sys_write = sym sys_write,
-            hello_world = sym hello_world,
-            ipc_write = sym ipc_write,
-            ipc_read = sym ipc_read,
-            sys_yield = sym sys_yield,
+            syscall_router = sym syscall_router,
             tss_timer = const(0x24 + gdt::TIMER_INTERRUPT_INDEX * 8),
             tss_temp = const(0x24 + gdt::SYSCALL_TEMP_INDEX * 8),
             ks_offset = const(SYSCALL_KERNEL_STACK_OFFSET),
@@ -115,6 +91,30 @@ extern "C" fn handle_syscall() {
             user_code_end = const(threads::USER_CODE_END),
             options(noreturn),
         );
+    }
+}
+
+extern "C" fn syscall_router(context_ptr: *mut RegisterState, syscall_id: u64, arg1: u64, arg2: u64, arg3: u64) {
+
+    let context = unsafe{&mut *context_ptr};
+
+    // Set the CS and SS segment selectors
+    let (code_selector, data_selector) =
+    if context.rip < threads::USER_CODE_START {
+        gdt::get_kernel_segments()
+    } else {
+        gdt::get_user_segments()
+    };
+    context.cs = code_selector.0 as u64;
+    context.ss = data_selector.0 as u64;
+
+    match syscall_id {
+        0 => hello_world(),
+        1 => sys_write(arg1 as *mut u8, arg2 as usize),
+        2 => ipc_write(context_ptr, arg1, arg2),
+        3 => ipc_read(context_ptr, arg1),
+        4 => sys_yield(context_ptr),
+        _ => println!("Unknown syscall {:?} {} {} {}", context_ptr, syscall_id, arg1, arg2)
     }
 }
 
@@ -239,7 +239,7 @@ fn sys_yield(context_ptr: *mut RegisterState) {
     cpu::launch_thread(next_stack);
 }
 
-extern "C" fn sys_write(ptr: *mut u8, len:usize) {
+extern "C" fn sys_write(ptr: *mut u8, len: usize) {
     let u8_slice = unsafe {slice::from_raw_parts(ptr, len)};
 
     if let Ok(s) = str::from_utf8(u8_slice) {
