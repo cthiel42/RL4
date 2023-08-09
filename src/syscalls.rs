@@ -178,7 +178,6 @@ fn ipc_read(context_ptr: *mut RegisterState, handle: u64) {
                 }
             }
 
-            println!("ipc_read returning: {}", returning);
             if !returning {
                 // Original thread is waiting. Schedule next thread
                 drop(rdv);
@@ -186,7 +185,6 @@ fn ipc_read(context_ptr: *mut RegisterState, handle: u64) {
                 println!("ipc_read new_context_addr: {:#x}", new_context_addr);
                 cpu::launch_thread(new_context_addr);
             }
-            println!("ipc_read done");
         } else {
             // Missing handle
             thread.return_error(SYSCALL_ERROR_INVALID_HANDLE);

@@ -9,8 +9,6 @@ An L4 microkernel written in Rust.
 To compile the project, run `cargo bootimage` from the root directory. This will generate a file at `target/target/debug/bootimage-rl4.bin` that can then be run on QEMU using the command `qemu-system-x86_64 -drive format=raw,file=target/target/debug/bootimage-rl4.bin`
 
 ## Current Objectives
-1. IPC
+1. Documentation for IPC
 1. Timer for Ping Pong
 1. Ping Pong Test
-1. Documentation
-1. More Documentation

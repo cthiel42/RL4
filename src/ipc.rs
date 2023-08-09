@@ -4,7 +4,6 @@ use core::mem;
 
 pub enum Message {
     Short(u64),
-    Long,
 }
 
 pub enum Rendezvous {

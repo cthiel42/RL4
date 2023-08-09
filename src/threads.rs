@@ -93,7 +93,7 @@ pub fn schedule_next(context_addr: usize) -> usize {
             if thread.page_table_physaddr != 0 {
                 set_cr3(thread.page_table_physaddr);
             }
-            // println!("Switching to thread {}", thread.id());
+            println!("Switching to thread {}", thread.id());
             // Point the stack to the new context
             thread.context as usize
           },
@@ -101,7 +101,7 @@ pub fn schedule_next(context_addr: usize) -> usize {
     }
 }
 
-pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Result<usize, &'static str> {
+pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Box<Thread> {
     use elf::endian::AnyEndian;
     use elf::ElfBytes;
     use elf::abi::PT_LOAD;
@@ -109,7 +109,7 @@ pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Res
     // Verify headers are for an ELF file
     const ELF_HEADERS: [u8; 4] = [0x7f, b'E', b'L', b'F'];
     if bin[0..4] != ELF_HEADERS {
-        return Err("Invalid ELF file");
+        println!("Invalid ELF file");
     }
 
     let file = ElfBytes::<AnyEndian>::minimal_parse(bin).unwrap();
@@ -128,7 +128,7 @@ pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Res
         let end_address = start_address + segment_size;
         if (start_address < VirtAddr::new(USER_CODE_START))
             || (end_address >= VirtAddr::new(USER_CODE_END)) {
-                return Err("ELF segment outside allowed range");
+                println!("ELF segment outside allowed range");
             }
 
         // Allocate memory in the pagetable
@@ -138,7 +138,7 @@ pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Res
                             PageTableFlags::PRESENT |
                             PageTableFlags::WRITABLE |
                             PageTableFlags::USER_ACCESSIBLE).is_err() {
-            return Err("Could not allocate memory");
+            println!("Could not allocate memory");
         }
 
         let source = &bin[segment.p_offset as usize..][..segment.p_filesz as usize];
@@ -177,18 +177,13 @@ pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Res
                            PageTableFlags::PRESENT |
                            PageTableFlags::WRITABLE |
                            PageTableFlags::USER_ACCESSIBLE).is_err()  {
-        return Err("Could not allocate memory");
+        println!("Could not allocate memory");
     }
     context.rsp = (USER_STACK_START as u64) + USER_STACK_SIZE as u64;
     context.rax = USER_HEAP_START as u64;
     context.rcx = USER_HEAP_SIZE as u64;
-    
-    println!("Adding user thread to queue");
-    interrupts::without_interrupts(|| {
-        RUNNING_QUEUE.write().push_front(new_thread);
-    });
 
-    return Ok(0);
+    return new_thread;
 }
 
 pub fn next_id() -> u64 {
@@ -251,9 +246,6 @@ impl Thread {
         match message {
             Message::Short(value) => {
                 context.rdi = value;
-            },
-            Message::Long => {
-                context.rdi = 42;
             }
         }
     }

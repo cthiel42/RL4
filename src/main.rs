@@ -53,8 +53,11 @@ fn panic(info: &PanicInfo) -> ! {
 fn start_ping_pong() {
     println!("kernel thread started");
     // threads::new_kernel_thread(kernel_thread_main);
-    let _ = threads::new_user_thread(include_bytes!("../user_space/ping_pong/target/target/debug/ping_pong"), Vec::from([RENDEZVOUS.clone()]));
-    let _ = threads::new_user_thread(include_bytes!("../user_space/ping_pong/target/target/debug/ping_pong"), Vec::from([RENDEZVOUS.clone()]));
+    let thread1 = threads::new_user_thread(include_bytes!("../user_space/ping_pong/target/target/debug/ping_pong"), Vec::from([RENDEZVOUS.clone()]));
+    let thread2 = threads::new_user_thread(include_bytes!("../user_space/ping_pong/target/target/debug/ping_pong"), Vec::from([RENDEZVOUS.clone()]));
+    println!("Threads created. Adding them to the queue");
+    threads::schedule_thread(thread1);
+    threads::schedule_thread(thread2);
     println!("Ping pong threads created - kernel");
     loop {
         println!("<< 0 >>");
