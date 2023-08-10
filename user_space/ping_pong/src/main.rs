@@ -54,10 +54,10 @@ pub unsafe extern "sysv64" fn _start() {
     }
 
 
-    // send ipc message
     let mut msg: u64 = 0;
     let mut err: u64 = 0;
     loop {
+        // send ipc message
         unsafe {
             asm!("mov rax, 2", // write ipc function
                 "mov rdi, 0", // First argument
