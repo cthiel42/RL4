@@ -182,7 +182,7 @@ fn ipc_read(context_ptr: *mut RegisterState, handle: u64) {
                 // Original thread is waiting. Schedule next thread
                 drop(rdv);
                 let new_context_addr = threads::schedule_next(context_ptr as usize);
-                println!("ipc_read new_context_addr: {:#x}", new_context_addr);
+                // println!("ipc_read new_context_addr: {:#x}", new_context_addr);
                 cpu::launch_thread(new_context_addr);
             }
         } else {

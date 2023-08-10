@@ -45,6 +45,14 @@ pub unsafe extern "sysv64" fn _start() {
     }
     */
 
+    let s = "starting";
+    unsafe {
+        asm!("mov rax, 1", // write syscall function
+            "syscall",
+            in("rdi") s.as_ptr(), // First argument
+            in("rsi") s.len()); // Second argument
+    }
+
 
     // send ipc message
     let mut msg: u64 = 0;
@@ -66,17 +74,37 @@ pub unsafe extern "sysv64" fn _start() {
                 lateout("rdi") msg);
         }
 
-        // Print progress
-        let mut s = String::<32>::new();
-        let _ = write!(s, "ipc read: {msg}");
-        unsafe {
-            asm!("mov rax, 1", // write syscall function
-                "syscall",
-                in("rdi") s.as_ptr(), // First argument
-                in("rsi") s.len()); // Second argument
+        Print progress
+        if msg % 10000 == 0 {
+            let mut s = String::<32>::new();
+            let _ = write!(s, "ipc read: {msg}");
+            unsafe {
+                asm!("mov rax, 1", // write syscall function
+                    "syscall",
+                    in("rdi") s.as_ptr(), // First argument
+                    in("rsi") s.len()); // Second argument
+            }
         }
-
+        
         msg += 1;
+        if msg == 1000000 {
+            break;
+        }
+    }
+
+    let s = "done";
+    unsafe {
+        asm!("mov rax, 1", // write syscall function
+            "syscall",
+            in("rdi") s.as_ptr(), // First argument
+            in("rsi") s.len()); // Second argument
+    }
+
+    loop {
+        unsafe {
+            asm!("mov rax, 4",
+                "syscall");
+        }
     }
 }
 

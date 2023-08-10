@@ -93,7 +93,7 @@ pub fn schedule_next(context_addr: usize) -> usize {
             if thread.page_table_physaddr != 0 {
                 set_cr3(thread.page_table_physaddr);
             }
-            println!("Switching to thread {}", thread.id());
+            // println!("Switching to thread {}", thread.id());
             // Point the stack to the new context
             thread.context as usize
           },
