@@ -11,4 +11,4 @@ I suspect some work could be done around the rendezvous implementation and IPC s
 - `/docs` contains various documentation and progress reports related to this project. These docs are meant to cover the high level aspects of the kernel and are therefore not comprehensive
 
 ## Compiling and Running
-To compile the project, run `cargo bootimage` from the root directory. This will generate a file at `target/target/debug/bootimage-rl4.bin` that can then be run on QEMU using the command `qemu-system-x86_64 -drive format=raw,file=target/target/debug/bootimage-rl4.bin`
+To compile the project, run `cargo bootimage` from the root directory. If you don't have nightly builds enabled, you will likely need to set this up. TheYou can reference how to set this up in the docs I have at [docs/2_rust_on_metal.md](docs/2_rust_on_metal.md). After compiling the project, you will generate a file at `target/target/debug/bootimage-rl4.bin` that can then be run on QEMU using the command `qemu-system-x86_64 -drive format=raw,file=target/target/debug/bootimage-rl4.bin`.
