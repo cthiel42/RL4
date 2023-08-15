@@ -64,19 +64,3 @@ fn start_ping_pong() {
         x86_64::instructions::hlt();
     }
 }
-
-fn kernel_thread_main() {
-    println!("Kernel thread start");
-    threads::new_kernel_thread(test_kernel_fn2);
-    loop {
-        println!("<< 1 >>");
-        x86_64::instructions::hlt();
-    }
-}
-
-fn test_kernel_fn2() {
-    loop {
-        println!("<< 2 >>");
-        x86_64::instructions::hlt();
-    }
-}

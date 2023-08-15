@@ -14,7 +14,6 @@ pub struct BootInfoFrameAllocator {
 }
 
 struct MemoryInfo {
-    boot_info: &'static BootInfo,
     physical_memory_offset: VirtAddr,
     frame_allocator: BootInfoFrameAllocator,
     kernel_l4_table: &'static mut PageTable
@@ -34,7 +33,6 @@ pub unsafe fn init(boot_info: &'static BootInfo) {
         allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
         
         unsafe { MEMORY_INFO = Some(MemoryInfo {
-            boot_info,
             physical_memory_offset,
             frame_allocator,
             kernel_l4_table

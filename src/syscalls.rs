@@ -1,5 +1,5 @@
 use core::arch::asm;
-use core::{slice, str, ptr};
+use core::{slice, str};
 use crate::threads;
 use crate::cpu;
 use crate::gdt;
@@ -10,8 +10,6 @@ const MSR_STAR: usize = 0xc0000081;
 const MSR_LSTAR: usize = 0xc0000082;
 const MSR_FMASK: usize = 0xc0000084;
 const MSR_KERNEL_GS_BASE: usize = 0xC0000102;
-pub const SYSCALL_ERROR_SEND_BLOCKING: u64 = 1;
-pub const SYSCALL_ERROR_RECV_BLOCKING: u64 = 2;
 pub const SYSCALL_ERROR_INVALID_HANDLE: u64 = 3;
 const SYSCALL_KERNEL_STACK_OFFSET: u64 = 1024;
 

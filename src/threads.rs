@@ -3,7 +3,6 @@ use alloc::vec::Vec;
 use spin::RwLock;
 use lazy_static::lazy_static;
 use alloc::{boxed::Box, collections::vec_deque::VecDeque, sync::Arc};
-use core::arch::asm;
 use x86_64::instructions::interrupts;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::PageTableFlags;
@@ -145,7 +144,7 @@ pub fn new_user_thread(bin: &[u8], handles: Vec<Arc<RwLock<Rendezvous>>>) -> Box
         crate::arch::elf::copy_memory(segment_address as usize, source);
     }
 
-    let mut new_thread = {
+    let new_thread = {
         let kernel_stack = Vec::with_capacity(KERNEL_STACK_SIZE);
         let kernel_stack_end = (VirtAddr::from_ptr(kernel_stack.as_ptr()) + KERNEL_STACK_SIZE).as_u64();
         let user_stack = Vec::with_capacity(USER_STACK_SIZE);
@@ -226,10 +225,6 @@ impl Thread {
 
     fn context_mut(&self) -> &mut RegisterState {
         unsafe {&mut *(self.context as *mut RegisterState)}
-    }
-
-    fn context(&self) -> &RegisterState {
-        unsafe {& *(self.context as *const RegisterState)}
     }
 
     pub fn set_context(&mut self, context_ptr: *mut RegisterState) {
