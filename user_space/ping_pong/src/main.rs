@@ -74,7 +74,7 @@ pub unsafe extern "sysv64" fn _start() {
                 lateout("rdi") msg);
         }
 
-        Print progress
+        // Print progress
         if msg % 10000 == 0 {
             let mut s = String::<32>::new();
             let _ = write!(s, "ipc read: {msg}");
