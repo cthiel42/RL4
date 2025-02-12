@@ -71,7 +71,7 @@ From here we can implement a function that creates a new kernel thread.
         });
     }
 
-There's a few helper functions that have been defined in `gdt.rs` that are referenced within here, and will be referenced within user thread functions as well. This will create a thread and add it to our queue, but we need a way to actual get the thread to run. We can do this by creating a function that can be called by our timer interrupt.
+There's a few helper functions that have been defined in `gdt.rs` that are referenced within here, and will be referenced within user thread functions as well. This will create a thread and add it to our queue, but we need a way to actually get the thread to run. We can do this by creating a function that can be called by our timer interrupt.
 
 ## Scheduling
 

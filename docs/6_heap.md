@@ -6,7 +6,7 @@ As of now the kernel currently supports local variables and static variables. Lo
 
 ## Heap
 
-For the most part we really need to set up the memory range the heap will use. This is all defined in `allocator.rs`. We'll set two static variables that are used to define the heap location and the heap size. This are relatively arbitrary values. I used this location (other than it's unused memory) since it lets me easily identify what memory is being used for what when I'm troubleshooting. The heap size lets us use 1000 pages worth of memory as well.
+For the most part we really need to set up the memory range the heap will use. This is all defined in `allocator.rs`. We'll set two static variables that are used to define the heap location and the heap size. These are relatively arbitrary values. I used this location (other than it's unused memory) since it lets me easily identify what memory is being used for what when I'm troubleshooting. The heap size lets us use 1000 pages worth of memory as well.
 
     pub const HEAP_START: usize = 0x8000000;
     pub const HEAP_SIZE: usize = 1000 * 4096; // 4 MiB
