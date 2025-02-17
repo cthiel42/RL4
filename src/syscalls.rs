@@ -1,3 +1,4 @@
+use core::arch::naked_asm;
 use core::arch::asm;
 use core::{slice, str};
 use crate::threads;
@@ -16,7 +17,7 @@ const SYSCALL_KERNEL_STACK_OFFSET: u64 = 1024;
 #[naked]
 extern "C" fn handle_syscall() {
     unsafe {
-        asm!(
+        naked_asm!(
             "swapgs",
             "mov gs:{tss_temp}, rsp",
             "mov rsp, gs:{tss_timer}",
@@ -87,7 +88,7 @@ extern "C" fn handle_syscall() {
             ks_offset = const(SYSCALL_KERNEL_STACK_OFFSET),
             user_code_start = const(threads::USER_CODE_START),
             user_code_end = const(threads::USER_CODE_END),
-            options(noreturn),
+            options(),
         );
     }
 }

@@ -1,6 +1,7 @@
 use x86_64::structures::idt::InterruptDescriptorTable;
 use x86_64::structures::idt::InterruptStackFrame;
 use x86_64::structures::idt::PageFaultErrorCode;
+use core::arch::naked_asm;
 use core::arch::asm;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -67,7 +68,7 @@ extern "C" fn timer_interrupt_helper(context: &mut RegisterState) -> usize {
 #[naked]
 pub extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     unsafe {
-        asm!(
+        naked_asm!(
             // Disable interrupts
             "cli",
             // Push registers
@@ -117,7 +118,7 @@ pub extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptSta
             // Interrupt return
             "iretq",
             handler = sym timer_interrupt_helper,
-            options(noreturn)
+            options()
         );
     }
 }
